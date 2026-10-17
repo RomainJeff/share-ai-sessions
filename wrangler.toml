@@ -8,7 +8,6 @@ routes = [{ pattern = "sessions.example.com", custom_domain = true }, { pattern 
 
 [[r2_buckets]]
 binding = "SESSIONS"
-# Not created yet (T12): `wrangler r2 bucket create claude-session-share`.
 bucket_name = "claude-session-share"
 
 [[d1_databases]]
