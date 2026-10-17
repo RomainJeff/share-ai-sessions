@@ -103,7 +103,9 @@ Sync publishes complete lines and waits for an unfinished final line. It reads t
 
 ## Browser reader
 
-Open the configured app URL in the browser to filter sessions of your projects by project, repo, author, UTC update period, or title/summary. Open `/s/<id>` to read the whole conversation in a scrollable container opened at the latest messages, with collapsed tools and token usage deduplicated by `message.id`. Transcript content is displayed as text. Open **Mes projets** (`/projects`) to see your roles and live session counts, then open a project’s sessions or, as an owner, its settings (`/projects/<slug>/settings`) to add members, change roles, or remove members. Membership changes use the existing JSON API and display its errors.
+Open the configured app URL for the five most recently synchronized sessions and direct access to active projects. **Projets** (`/projects`) lists all accessible projects, including empty ones, with session/member counts and latest synchronization. Open `/projects/<slug>` for that project’s sessions, ordered by synchronization time, with search, author selection, **À moi**, and pagination. **Toutes les sessions** (`/sessions`) searches across accessible projects; extra filters cover repo and inclusive UTC synchronization dates. Old `/?project=…` and list-filter links redirect to the matching page. Session counts cover the 90-day visibility window.
+
+Open `/s/<id>` to read the full conversation; the header returns to the project or filtered list you came from. Tools remain collapsed and token usage is deduplicated by `message.id`. **Membres** shows project membership read-only; owners manage it in `/projects/<slug>/settings`. **Détails → Changer de projet** performs an explicit move under the rights above.
 
 The **Reprendre** button copies `/share-session pull <id>` for use in Claude Code. The pull command is delivered by T05; the reader only copies the instruction.
 

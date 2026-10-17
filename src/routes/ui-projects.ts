@@ -56,5 +56,5 @@ export async function projectSettingsPage(request: Request, env: Env, who: Ident
         <label class="f">Rôle<select class="field" name="role">${roles("reader")}</select></label>
         <button class="btn primary" type="submit" disabled>Ajouter un membre</button>
       </form></div></section>
-    </div>`, 200, false, { active: "projects", projects, email: who.email, breadcrumbs: [{ label: "Projets", href: "/projects" }, { label: project.name, href: projectPath(slug) }, { label: "Paramètres" }] });
+    </div>`, 200, false, { active: "projects", projects, email: who.email, currentProject: slug, breadcrumbs: [{ label: "Projets", href: "/projects" }, { label: project.name, href: projectPath(slug) }, { label: "Paramètres" }] });
 }

@@ -7,6 +7,7 @@ export type NavigationOptions = {
   email?: string;
   backHref?: string;
   backLabel?: string;
+  currentProject?: string;
 };
 
 /** All transcript and metadata values enter HTML through this text/attribute escape. */
@@ -431,10 +432,22 @@ body.has-navigation{
 .has-navigation .project-title h1{font-size:30px;overflow-wrap:anywhere}
 .has-navigation .project-info{display:flex;gap:17px;flex-wrap:wrap;color:var(--nav-muted);font-size:12px;margin:17px 0 0;align-items:center}
 .has-navigation .project-info span{display:flex;align-items:center;gap:6px}
-.has-navigation .project-tabs{display:flex;gap:27px;border-bottom:1px solid var(--nav-line);margin-bottom:24px}
+.has-navigation .project-tabs{display:flex;gap:27px;border-bottom:1px solid var(--nav-line);margin-bottom:24px;position:relative}
 .has-navigation .project-tabs :is(button,a,summary){font-size:12px;min-height:44px;padding:0 1px;color:var(--nav-muted);position:relative;display:flex;align-items:center;gap:6px}
 .has-navigation .project-tabs .active{color:var(--nav-ink);font-weight:550}
 .has-navigation .project-tabs .active:after{content:"";height:2px;background:var(--nav-ink);position:absolute;bottom:-1px;left:0;right:0}
+.has-navigation .project-members{position:relative}
+.has-navigation .project-members>summary{cursor:pointer;list-style:none}
+.has-navigation .project-members>summary::-webkit-details-marker{display:none}
+.has-navigation .project-members>summary:after{content:"";width:5px;height:5px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);margin-left:3px;margin-top:-3px}
+.has-navigation .project-members[open]>summary{color:var(--nav-ink)}
+.has-navigation .project-members[open]>summary:after{transform:rotate(225deg);margin-top:3px}
+.has-navigation .members-panel{position:absolute;top:calc(100% + 7px);left:0;width:400px;max-width:calc(100vw - 300px);z-index:9;box-shadow:var(--shadow-md);border-radius:10px;max-height:min(60vh,460px);overflow-y:auto;overscroll-behavior:contain}
+.has-navigation .members-panel ul{list-style:none;margin:0;padding:6px 12px}
+.has-navigation .members-panel li{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:11px 0;font-size:12px}
+.has-navigation .members-panel li+li{border-top:1px solid var(--nav-line)}
+.has-navigation .members-panel li>span:first-child{min-width:0;overflow-wrap:anywhere}
+.has-navigation .members-panel .role{flex:none}
 .has-navigation .group-title{color:var(--nav-muted);font-size:11px;font-weight:500;margin:24px 0 9px}
 .has-navigation .project-sessions.in-project .session-row{grid-template-columns:minmax(0,1fr) 137px 67px 90px;min-height:86px}
 .has-navigation .project-sessions .session-note{max-width:68ch}
@@ -451,7 +464,8 @@ body.has-navigation{
 .has-navigation .installation p{margin:0}.has-navigation .installation code{font-family:var(--f-mono)}
 .has-navigation .skip-link{position:fixed;left:16px;top:-100px;z-index:30;padding:10px 16px;background:hsl(var(--background));border:2px solid var(--nav-accent);border-radius:7px}
 .has-navigation .skip-link:focus{top:12px}
-.has-navigation .nav-back{display:inline-flex;align-items:center;min-height:44px;gap:5px;font-size:12px;color:var(--nav-muted);margin:-10px 0 14px}
+.has-navigation .nav-back{display:inline-flex;align-items:center;min-height:44px;gap:5px;font-size:12px;color:var(--nav-muted);min-width:0;max-width:180px;flex:0 1 auto}
+.has-navigation .nav-back span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .has-navigation.is-detail .content{padding-bottom:48px}
 .has-navigation .dhead h1{font-size:27px;font-weight:620;letter-spacing:-.65px}
 .has-navigation .detail .chat{border-radius:12px;box-shadow:none}
@@ -521,6 +535,8 @@ body.has-navigation{
   .has-navigation .project-title .folder-icon{width:37px;height:37px}
   .has-navigation .project-info{gap:10px 15px;font-size:11px;margin-top:15px}
   .has-navigation .project-tabs{margin-bottom:19px}
+  .has-navigation .project-members{position:static}
+  .has-navigation .members-panel{left:0;right:0;width:auto;max-width:none}
   .has-navigation .project-sessions.in-project .session-row{grid-template-columns:minmax(0,1fr) 67px;gap:7px 10px;min-height:99px}
   .has-navigation .project-sessions .session-note{font-size:10px;max-width:100%}
   .has-navigation .project-sessions.in-project .list-author{display:flex;grid-row:2;grid-column:1;font-size:10px;margin-top:2px}
@@ -530,7 +546,7 @@ body.has-navigation{
   .has-navigation .group-title{margin:20px 0 9px}
   .has-navigation .btn{min-height:44px}
   .has-navigation .footnote{font-size:10px}
-  .has-navigation .nav-back{display:inline-flex;align-items:center;min-height:44px;gap:5px;font-size:12px;color:var(--nav-muted);margin:-10px 0 14px}
+  .has-navigation .nav-back{max-width:55%;font-size:12px}
   .has-navigation.is-detail .content{padding-bottom:calc(126px + var(--mobile-nav-height))}
   .has-navigation .actionbar{bottom:var(--mobile-nav-height);padding-bottom:12px}
   .has-navigation .toast{bottom:calc(16px + var(--mobile-nav-height))}
@@ -589,11 +605,11 @@ function navigationShell(body: string, detail: boolean, options: NavigationOptio
   const tones = ["violet", "blue", "green", "amber"];
   const projects = options.projects.filter((project) => project.last_synced_at !== null).slice(0, 4).map((project, index) => {
     const href = `/projects/${encodeURIComponent(project.slug)}`;
-    const selected = options.breadcrumbs.some((crumb) => crumb.href === href) || options.backHref?.split("?")[0] === href;
+    const selected = options.currentProject === project.slug || options.breadcrumbs.some((crumb) => crumb.href === href) || options.backHref?.split("?")[0] === href;
     return `<a class="side-project${selected ? " selected" : ""}" href="${escapeHtml(href)}"><span class="project-dot ${tones[index]}" aria-hidden="true"></span><span class="project-name">${escapeHtml(project.name)}</span><span class="count">${escapeHtml(project.sessions)}</span></a>`;
   }).join("");
   const back = detail && options.backHref
-    ? `<a class="nav-back" data-list-back href="${escapeHtml(options.backHref)}">${icon("back")}${escapeHtml(options.backLabel || "Retour aux sessions")}</a>`
+    ? `<a class="nav-back" data-list-back href="${escapeHtml(options.backHref)}" title="${escapeHtml(options.backLabel || "Retour aux sessions")}">${icon("back")}<span>${escapeHtml(options.backLabel || "Retour aux sessions")}</span></a>`
     : "";
   return `<a class="skip-link" href="#${detail ? "view" : "home"}">Aller au contenu</a>
 <div class="shell"><aside class="sidebar" aria-label="Espace partagé">
@@ -604,10 +620,10 @@ function navigationShell(body: string, detail: boolean, options: NavigationOptio
     ${options.email ? `<div class="profile"><span class="avatar" aria-hidden="true">${escapeHtml(initials(options.email))}</span><small>${escapeHtml(options.email)}</small></div>` : ""}
   </div>
 </aside><div class="shell-main"><header class="topbar">
-  <a class="mobile-brand" href="/">${icon("chat")}Session Share</a>
+  ${back || `<a class="mobile-brand" href="/">${icon("chat")}Session Share</a>`}
   <nav class="crumb" aria-label="Fil d’Ariane">${breadcrumbs}</nav>
   <form class="global-search" method="get" action="/sessions" role="search"><label class="sr" for="global-q">Rechercher dans toutes les sessions</label><input id="global-q" name="q" type="search" placeholder="Rechercher une session…"><button type="submit" aria-label="Rechercher dans toutes les sessions">${icon("search")}</button></form>
-</header><main class="content" id="${detail ? "view" : "home"}" tabindex="-1">${back}${body}
+</header><main class="content" id="${detail ? "view" : "home"}" tabindex="-1">${body}
   <footer class="installation" aria-label="Installer le skill Session Share"><details class="panel share-help" id="share-help"><summary>${icon("info")}Partager une session<span class="tchev">${icon("chev")}</span></summary><div class="pb">
     <p>Pour partager une conversation, ajoutez le skill dans Claude (Paramètres → Capacités → Skills) ou dézippez-le dans <code>~/.claude/skills/</code>, puis lancez <code>/share-session</code>.</p>
     <a class="btn" href="/share-session.skill" download>Télécharger le skill <span class="mono">share-session.skill</span></a>

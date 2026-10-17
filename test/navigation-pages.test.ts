@@ -78,8 +78,23 @@ describe("navigation pages", () => {
   it("distinguishes an empty reader project from an owner project and from a search without results", async () => {
     const reader = await project("reader");
     const owner = await project();
+    const ownerEmail = `owner-${crypto.randomUUID()}@example.com`;
+    await env.DB.prepare("INSERT INTO project_members VALUES (?, ?, 'owner', ?, ?)").bind(reader, ownerEmail, viewer, Date.now()).run();
+    const readerResponse = await get(`/projects/${reader}`);
+    expect(await attributes(readerResponse.clone(), ".project-members", "open")).toEqual([]);
     const readerHtml = await (await get(`/projects/${reader}`)).text();
     expect(readerHtml).toContain("Ce projet attend sa première session");
+    expect(readerHtml).toContain("Membres (2)");
+    const memberText: string[] = [];
+    await new HTMLRewriter().on(".members-panel li", { text(chunk) { memberText.push(chunk.text); } }).transform(readerResponse).text();
+    const allMembers = memberText.join("");
+    expect(allMembers).toContain(viewer);
+    expect(allMembers).toContain(ownerEmail);
+    expect(allMembers).toContain("Propriétaire");
+    expect(allMembers).toContain("Lecture seule");
+    expect(readerHtml).not.toContain(`/projects/${reader}/settings`);
+    expect(await attributes(new Response(readerHtml), "form[data-project-member]", "data-project-member")).toEqual([]);
+    expect((await get(`/projects/${reader}`, BOB)).status).toBe(404);
     expect(readerHtml).toContain("Demandez à un membre disposant du droit d’écriture");
     expect(readerHtml).not.toContain("Partager une première session");
     const ownerHtml = await (await get(`/projects/${owner}`)).text();

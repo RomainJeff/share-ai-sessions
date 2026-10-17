@@ -186,7 +186,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
       ${invalid ? `<p class="ro-note">${invalid} ligne(s) JSONL invalide(s) ignorée(s).</p>` : ""}
       ${conversation || '<p class="empty">Aucun message.</p>'}
     </section></div>`, 200, true, {
-      active: "projects", projects, email: who.email, backHref,
+      active: "projects", projects, email: who.email, currentProject: String(session.project), backHref,
       backLabel: backHref.startsWith("/sessions") ? "Toutes les sessions" : project?.name || String(session.project),
       breadcrumbs: [
         { label: "Accueil", href: "/" }, { label: "Projets", href: "/projects" },
