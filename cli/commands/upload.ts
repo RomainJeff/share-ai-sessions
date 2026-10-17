@@ -1,7 +1,10 @@
+import { createHash } from "node:crypto";
+import { parseArgs } from "node:util";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { api, ClientError } from "../lib.ts";
 import { detectProject } from "../project.ts";
+import { redactJsonl, type RedactionOptions } from "../redact.ts";
 
 type Line = Record<string, any>;
 
@@ -31,8 +34,7 @@ export function readMeta(jsonl: string, fileName: string) {
   };
 }
 
-// T02: raw upload, no redaction yet (T04). Do not upload real sessions to prod before T04.
-export async function upload(path: string): Promise<unknown> {
+export async function upload(path: string, options: RedactionOptions & { confirm?: string } = {}): Promise<unknown> {
   let jsonl: string;
   try {
     jsonl = await readFile(path, "utf8");
@@ -42,8 +44,52 @@ export async function upload(path: string): Promise<unknown> {
   const { cwd, ...meta } = readMeta(jsonl, path);
   const body = { ...meta, cwd_base: cwd, project: detectProject(cwd ?? process.cwd()) };
 
+  const redacted = redactJsonl(jsonl, options);
+  const metadata = redactJsonl(JSON.stringify(body));
+  const replacements = { ...redacted.replacements };
+  for (const [kind, count] of Object.entries(metadata.replacements)) replacements[kind] = (replacements[kind] ?? 0) + count;
+  const preview = {
+    lines: redacted.lines,
+    replacements,
+    bytes: Buffer.byteLength(redacted.jsonl),
+    thinking_removed: redacted.thinking_removed,
+    tool_results_stripped: redacted.tool_results_stripped,
+  };
+  // Bind consent to the source snapshot, sanitized metadata and strip policy. No unsafe text is printed.
+  const confirmation = createHash('sha256').update(JSON.stringify({
+    source: createHash('sha256').update(jsonl).digest('hex'),
+    metadata: metadata.jsonl,
+    stripThinking: !!options.stripThinking,
+    stripToolResults: !!options.stripToolResults,
+  })).digest('hex');
+  if (!options.confirm) return { status: 'confirmation_required', preview, confirmation };
+  if (options.confirm !== confirmation) {
+    throw new ClientError('confirmation_mismatch', 'Transcript or options changed, or confirmation is invalid; request a fresh preview and confirm its hash');
+  }
+
   const form = new FormData();
-  form.set("meta", JSON.stringify(body));
-  form.set("jsonl", new Blob([jsonl], { type: "application/x-ndjson" }), `${meta.id}.jsonl`);
+  form.set("meta", metadata.jsonl);
+  form.set("jsonl", new Blob([redacted.jsonl], { type: "application/x-ndjson" }), "session.jsonl");
   return api("/api/sessions", { method: "POST", body: form });
+}
+
+/** Two-step consent also works in a noninteractive agent session; no blanket --yes bypass. */
+export async function uploadCommand(args: string[]): Promise<unknown> {
+  let parsed: ReturnType<typeof parseArgs>;
+  try {
+    parsed = parseArgs({ args, allowPositionals: true, options: {
+      'strip-thinking': { type: 'boolean' },
+      'strip-tool-results': { type: 'boolean' },
+      confirm: { type: 'string' },
+    } });
+  } catch {
+    throw new ClientError('usage', 'Usage: client.ts upload <path.jsonl> [--strip-thinking] [--strip-tool-results] [--confirm <preview hash>]');
+  }
+  const [path] = parsed.positionals;
+  if (!path || parsed.positionals.length !== 1) throw new ClientError('usage', 'Provide one transcript path');
+  return upload(path, {
+    stripThinking: parsed.values['strip-thinking'] === true,
+    stripToolResults: parsed.values['strip-tool-results'] === true,
+    confirm: typeof parsed.values.confirm === 'string' ? parsed.values.confirm : undefined,
+  });
 }

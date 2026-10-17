@@ -4,16 +4,13 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { doctor } from "./commands/doctor.ts";
 import { list } from "./commands/list.ts";
-import { upload } from "./commands/upload.ts";
+import { uploadCommand } from "./commands/upload.ts";
 import { ClientError } from "./lib.ts";
 
 // One line per command; each command lives in its own file under commands/.
 const COMMANDS: Record<string, (args: string[]) => Promise<unknown>> = {
   doctor: () => doctor(),
-  upload: ([path]) => {
-    if (!path) throw new ClientError("usage", "Usage: client.ts upload <path.jsonl>");
-    return upload(path);
-  },
+  upload: uploadCommand,
   list: (args) => list(args),
 };
 
