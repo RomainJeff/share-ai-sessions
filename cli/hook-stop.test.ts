@@ -8,9 +8,9 @@ import cp from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { main } from "./client.ts";
-import { upload } from "./commands/upload.ts";
-import { CONFIG_PATH } from "./lib.ts";
+import { main } from "../../../.agents/skills/share-session/scripts/client.ts";
+import { upload } from "../../../.agents/skills/share-session/scripts/commands/upload.ts";
+import { CONFIG_PATH } from "../../../.agents/skills/share-session/scripts/lib.ts";
 
 async function syncFixture() {
   const temp = await mkdtemp(join(os.tmpdir(), "session-share-hook-"));
@@ -141,7 +141,7 @@ test("missing token blocks once with MCP recovery instructions and never on the 
     const decision = JSON.parse(first.stdout);
     assert.equal(decision.decision, "block");
     assert.match(decision.reason, /get_token/);
-    assert.ok(decision.reason.includes(`client.ts sync ${f.id}`));
+    assert.ok(decision.reason.includes(`client.ts" sync ${f.id}`));
     assert.equal(first.stderr, "");
     assert.deepEqual(await f.invoke(true), { stdout: "", stderr: "" });
     assert.equal(f.fetches(), 0);
@@ -177,7 +177,7 @@ test("unexpected Stop errors stay off stdout and do not leak upstream details", 
 test("hook-stop executable exits zero without the usual CLI result envelope", async () => {
   const f = await syncFixture();
   try {
-    const client = fileURLToPath(new URL("./client.ts", import.meta.url));
+    const client = fileURLToPath(new URL("../../../.agents/skills/share-session/scripts/client.ts", import.meta.url));
     const preload = `import os from 'node:os'; import fs from 'node:fs/promises'; import cp from 'node:child_process'; import {syncBuiltinESMExports} from 'node:module';
       os.homedir = () => ${JSON.stringify(f.temp)};
       const read = fs.readFile;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { redactJsonl } from './redact.ts';
+import { redactJsonl } from '../../../.agents/skills/share-session/scripts/redact.ts';
 import { jsonl, records, secrets } from './fixtures/secrets.ts';
 
 const parse = (s: string) => s.trimEnd().split('\n').map(l => JSON.parse(l));

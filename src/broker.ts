@@ -31,7 +31,7 @@ export async function mintSessionToken(env: Env, email: string, scope: string, s
     .setAudience(BROKER_AUD).setIssuedAt().setExpirationTime(expiresAt).sign(key);
   return {
     token, expires_at: new Date(expiresAt * 1000).toISOString(), base_url: BROKER_ISSUER,
-    command: `SESSION_TOKEN=${token} node cli/client.ts ${scope === "read" ? "list" : "upload <path.jsonl>"}`,
+    command: `SESSION_TOKEN=${token} node <share-session skill dir>/scripts/client.ts ${scope === "read" ? "list" : "upload <path.jsonl>"}`,
   };
 }
 
