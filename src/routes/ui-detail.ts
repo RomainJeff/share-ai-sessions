@@ -57,6 +57,7 @@ export async function sessionDetailPage(request: Request, env: Env, _who: Identi
   const command = `/share-session pull ${id}`;
   return page(String(session.title || id), `<header><h1>${e(session.title || id)}</h1>
     <p>${e(session.owner_name)} · ${e(session.owner_email)}</p><p>${e(session.project)}@${e(session.branch)} · ${e(session.model || records.find((r) => r.data.message?.model)?.data.message?.model)}</p>
+    ${session.forked_from ? `<p>forké depuis <a href="/s/${e(encodeURIComponent(String(session.forked_from)))}">${e(session.forked_from)}</a> · ${e(session.forked_from_owner)}</p>` : ""}
     <p>${tokens} tokens · ${usages.size} réponses API (usage dédupliqué par message.id) · ${records.length} lignes de conversation</p>
     <button data-copy="${e(command)}">Reprendre</button><pre>${e(command)}</pre></header>
     ${invalid ? `<p>${invalid} ligne(s) JSONL invalide(s) ignorée(s).</p>` : ""}

@@ -21,6 +21,7 @@ export async function createSession(request: Request, env: Env, who: Identity): 
   let meta: Record<string, unknown>;
   try {
     meta = JSON.parse(String(form.get("meta") ?? ""));
+    if (!meta || typeof meta !== "object" || Array.isArray(meta)) throw new Error();
   } catch {
     return Response.json({ error: "meta must be JSON" }, { status: 400 });
   }
@@ -31,11 +32,27 @@ export async function createSession(request: Request, env: Env, who: Identity): 
   }
 
   // Ownership ignores retention: an expired session still belongs to its owner.
-  const existing = await env.DB.prepare("SELECT owner_email, created_at FROM sessions WHERE id = ?")
+  const existing = await env.DB.prepare("SELECT owner_email, created_at, forked_from FROM sessions WHERE id = ?")
     .bind(id)
-    .first<{ owner_email: string; created_at: number }>();
+    .first<{ owner_email: string; created_at: number; forked_from: string | null }>();
   if (existing && existing.owner_email !== who.email) {
     return Response.json({ error: "forbidden" }, { status: 403 });
+  }
+  let forkedFrom = existing?.forked_from ?? null;
+  if (meta.forked_from !== undefined && meta.forked_from !== null) {
+    if (typeof meta.forked_from !== "string" || !UUID.test(meta.forked_from) || meta.forked_from === id) {
+      return Response.json({ error: "forked_from must be another session UUID" }, { status: 400 });
+    }
+    if (existing && meta.forked_from !== forkedFrom) {
+      return Response.json({ error: "forked_from cannot change" }, { status: 400 });
+    }
+    forkedFrom = meta.forked_from;
+  }
+  let forkedFromOwner: string | null = null;
+  if (forkedFrom) {
+    const origin = await env.DB.prepare("SELECT owner_email FROM sessions WHERE id = ?").bind(forkedFrom).first<{ owner_email: string }>();
+    if (!origin) return Response.json({ error: "forked_from session does not exist" }, { status: 400 });
+    forkedFromOwner = origin.owner_email;
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -58,12 +75,12 @@ export async function createSession(request: Request, env: Env, who: Identity): 
   await env.DB.prepare(
     `INSERT OR REPLACE INTO sessions
        (id, owner_email, owner_name, project, branch, title, cwd_base, model, cc_version,
-        msg_count, bytes, created_at, updated_at, last_synced_at, last_line_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        msg_count, bytes, created_at, updated_at, last_synced_at, last_line_hash, forked_from, forked_from_owner)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id, who.email, who.name, project, str(meta.branch), str(meta.title), str(meta.cwd_base, 1000),
-      str(meta.model), str(meta.cc_version), msgCount, file.size, existing?.created_at ?? now, now, now, hash,
+      str(meta.model), str(meta.cc_version), msgCount, file.size, existing?.created_at ?? now, now, now, hash, forkedFrom, forkedFromOwner,
     )
     .run();
 
