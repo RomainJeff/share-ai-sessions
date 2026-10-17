@@ -171,6 +171,24 @@ describe("moving sessions between projects", () => {
     expect(projects.projects.find(p => p.slug === target)?.sessions).toBe(1);
   });
 
+  it("offers writable destinations only to the session author or source owner", async () => {
+    const { source, target, id } = await fixture();
+    const readOnly = slug();
+    await create(CAROL, readOnly);
+    await setRole(CAROL, readOnly, ALICE, "reader");
+    const options: string[] = [];
+    let forms = 0;
+    await new HTMLRewriter().on("form[data-session-move]", { element() { forms++; } })
+      .on("form[data-session-move] option", { element(e) { options.push(e.getAttribute("value")!); } })
+      .transform(await call(ALICE, `/s/${id}`)).text();
+    expect(forms).toBe(1);
+    expect(options).toContain(target);
+    expect(options).not.toContain(source);
+    expect(options).not.toContain(readOnly);
+    await setRole(ALICE, source, CAROL, "writer");
+    expect(await (await call(CAROL, `/s/${id}`)).text()).not.toContain("data-session-move=");
+  });
+
   it("lets a session author move it with writer rights in both projects", async () => {
     const { source, target, id } = await fixture();
     await setRole(ALICE, target, BOB, "writer");

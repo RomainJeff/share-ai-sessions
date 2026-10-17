@@ -1,5 +1,5 @@
 import type { Identity } from "../auth";
-import { MEMBER, VISIBLE, visibleSince } from "../db";
+import { atLeast, MEMBER, roleIn, VISIBLE, visibleSince } from "../db";
 import { author, dateLabel, escapeHtml as e, icon, page } from "../ui";
 
 type RecordLine = { type?: string; timestamp?: string; isMeta?: boolean; isCompactSummary?: boolean; toolUseResult?: unknown; message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, number> } };
@@ -115,6 +115,19 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
     }
     if (final >= 0) conversation += renderRow(records[final]!);
   }
+  const sourceRole = await roleIn(env, String(session.project), who.email);
+  const canMove = sourceRole === "owner" || (session.owner_email === who.email && atLeast(sourceRole, "writer"));
+  const destinations = canMove ? (await env.DB.prepare(`SELECT p.slug, p.name FROM projects p
+    JOIN project_members m ON m.project = p.slug WHERE m.email = lower(?) AND m.role IN ('owner', 'writer') AND p.slug != ? ORDER BY p.name`)
+    .bind(who.email, session.project).all<{ slug: string; name: string }>()).results : [];
+  const movePanel = destinations.length ? `<details class="panel"><summary>Changer de projet<span class="tchev">${icon("chev")}</span></summary>
+    <div class="pb project-settings"><form data-session-move="${e(id)}">
+      <label class="f">Projet de destination<select name="project" required aria-label="Projet de destination">
+        ${destinations.map(p => `<option value="${e(p.slug)}">${e(p.name)} (${e(p.slug)})</option>`).join("")}
+      </select></label>
+      <p class="hint">Les membres du projet de destination auront accès à cette session. L’auteur devra y avoir le droit d’écriture pour continuer la synchronisation. Les forks et suites existants restent dans leur projet.</p>
+      <p role="alert" data-move-error hidden></p><button class="btn" type="submit" disabled>Déplacer la session</button>
+    </form></div></details>` : "";
   const command = `/share-session pull ${id}`;
   const model = session.model || records.find((r) => r.data.message?.model)?.data.message?.model;
   const meta = (label: string, value: unknown, mono = false) => value == null || value === "" ? "" : `<dt>${label}</dt><dd${mono ? ' class="mono"' : ""}>${e(value)}</dd>`;
@@ -150,6 +163,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
         <div class="cmd"><code id="resume-command">${e(command)}</code></div>
         <p class="hint">La copie sera une nouvelle session à votre nom. Celle-ci reste intacte.</p>
       </div></details>
+      ${movePanel}
     </aside>
     <section class="chat transcript" id="conversation" tabindex="0" aria-label="Conversation"><h2 class="chat-title">Conversation</h2>
       ${invalid ? `<p class="ro-note">${invalid} ligne(s) JSONL invalide(s) ignorée(s).</p>` : ""}

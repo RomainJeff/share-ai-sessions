@@ -389,6 +389,25 @@ if(conversation){
   window.visualViewport?.addEventListener('resize',sizeConversation);
   for(const panel of document.querySelectorAll('.side details,.hmeta'))panel.addEventListener('toggle',sizeConversation);
 }
+const moveForm=document.querySelector('[data-session-move]');
+if(moveForm){
+  const button=moveForm.querySelector('button');
+  const error=moveForm.querySelector('[data-move-error]');
+  button.disabled=false;
+  moveForm.addEventListener('submit',async event=>{
+    event.preventDefault();
+    button.disabled=true;
+    error.hidden=true;
+    try{
+      const response=await fetch('/api/sessions/'+encodeURIComponent(moveForm.dataset.sessionMove)+'/project',{
+        method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:moveForm.elements.project.value})
+      });
+      if(!response.ok){const result=await response.json();throw new Error(result.error||'Déplacement impossible.');}
+      window.location.reload();
+    }catch(reason){error.textContent=reason instanceof Error?reason.message:'Déplacement impossible. Réessayez.';error.hidden=false;}
+    finally{button.disabled=false;}
+  });
+}
 const projectSettings=document.querySelector('[data-project]');
 if(projectSettings){
   const error=projectSettings.querySelector('[data-project-error]');

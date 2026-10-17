@@ -1,6 +1,6 @@
 ---
 name: share-session
-description: Share a Claude Code session (JSONL) on Claude Session Share into a project you pick, list shared sessions by project, repo, author or title, sync new lines, stop syncing a session, or create projects and manage who can read or write them.
+description: Share a Claude Code session (JSONL) on Claude Session Share into a project you pick, list shared sessions by project, repo, author or title, sync new lines, stop syncing a session, move sessions between projects, or manage who can read or write them.
 ---
 
 # Share Session
@@ -43,7 +43,7 @@ Never run the login, type credentials, or read `~/.cloudflared/`. Setup ends at 
 ## MCP broker (without cloudflared)
 
 - Connector: `https://sessions-mcp.example.com/mcp`, OAuth through the allowlisted Access OIDC app.
-- Call `get_token({scope: "read"})` for list/read (sessions and projects), `get_token({scope: "write", session_id: "<lowercase UUID>"})` for upload/sync of one session, or `get_token({scope: "projects"})` for `project create`, `add` and `remove`. Another person's session cannot receive a write token. Roles still apply: a token never grants more than the user's role in the project.
+- Call `get_token({scope: "read"})` for list/read (sessions and projects), `get_token({scope: "write", session_id: "<lowercase UUID>"})` for upload/sync of one session, or `get_token({scope: "projects"})` for `project create`, `add`, `remove` and `move <id> --project <slug>`. Another person's session cannot receive a write token. Roles still apply: a token never grants more than the user's role in the project.
 - The response contains `token`, `expires_at`, `base_url`, and `command`. Execute the returned command, replacing `<share-session skill dir>` with this skill's base directory and `<path.jsonl>` for upload. `SESSION_TOKEN` makes the client use the MCP host API without local config or cloudflared.
 - Tokens expire after 10 minutes. Keep them only in the command's environment prefix; never save them to files or config, or include them in user-facing output. `token_expired` means call `get_token` again; `invalid_token` means obtain a fresh token from this connector.
 - Read scope cannot write; write scope can only upload/PATCH its session and cannot read or delete. Obtain a read token separately for read operations. Automatic cloud hooks and setup are T11.
@@ -60,7 +60,7 @@ Every session lives in exactly one **project**, chosen by the user, independent 
 
 - A session outside your projects does not exist for you: list, reader page, bundle and pull all answer "not found".
 - **Choosing the project at upload.** Before the first `upload` of a session, run `project list` and ask the user which project it goes into, showing the projects where they are `writer` or `owner`. Suggest the one most related to the session's subject or repo, but let the user decide. If none fits, offer to create one (`project create <slug> --name "<name>"`) and do it only on a yes. Never pick silently.
-- **Locked.** Once uploaded, a session stays in its project. Its re-uploads and syncs, its forks (`pull` then upload) and its compaction continuations go into the same project automatically: omit `--project`. The server refuses a different project (`bad_request: project is locked to …`).
+- **Assignment.** Re-uploads and syncs keep the session’s current project; new forks and compaction continuations inherit their origin’s current project. Omit `--project` on these uploads. To change an existing session’s project, use `move <full UUID> --project <slug>` or **Détails → Changer de projet** in the reader. The caller needs writer rights on the destination and must be either the session author with writer rights on the source, or an owner of the source project. Move only on the user’s explicit request. Moving changes access to the destination’s members, preserves the author and transcript, and leaves existing forks and continuations in their own projects. The author needs writer rights on the destination for later syncs; a move never adds members automatically.
 - **Adding people.** `project add <slug> <email> --role reader|writer|owner` (default `reader`) also changes the role of an existing member. The person must also be allowed by the Cloudflare Access policy of `sessions.example.com`: remind the user, the client cannot do it. Run `add` and `remove` only when the user asked for that change, for that email.
 - A project always keeps at least one owner. A member can leave a project with `project remove <slug> <own email>`.
 - Sessions shared before projects existed are in the `legacy` project, whose owners are everyone who had uploaded at that time.
@@ -82,6 +82,7 @@ Every session lives in exactly one **project**, chosen by the user, independent 
 | `sync <id>` / `sync --all` | Send complete new lines, redacted with the upload's strip policy, for one opted-in session or every manifest entry. Server bytes/hash of the sanitized stream decide the offset; conflict or rewritten prefix triggers a full replacement |
 | `stop <id>` / `stop current` | Remove the local manifest entry and record a stop tombstone, without deleting the remote session. Durable: hook and manual sync stay off until a new consented upload. Returns a `share-session:opt-out <id>` marker; keep it in the conversation. `current` requires `CLAUDE_SESSION_ID`; otherwise pass the id |
 | `list [--project slug] [--repo owner/repo] [--author email] [--mine] [--q text]` | Live sessions (synced within 90 days) of your projects, newest first. Render as a compact table: id, title, project, repo, author, date, messages |
+| `move <id> --project <slug>` | Move an existing session; full UUID required. Cloud: use a `projects` token. |
 | `project list` | Your projects with your role, member and session counts |
 | `project create <slug> [--name <name>]` | New project (`a-z`, `0-9`, inner dashes, 64 chars max), you become its owner |
 | `project show <slug>` | Project and its members with their roles (members only) |
