@@ -1,16 +1,28 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import fs from 'node:fs/promises';
+import os, { tmpdir } from 'node:os';
+import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { main } from './client.ts';
+import { CONFIG_PATH } from './lib.ts';
 import { jsonl, secrets, sessionId } from './fixtures/secrets.ts';
 
 test('CLI previews without auth/network, binds confirmation to content/options, sends only sanitized form data', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'session-share-redaction-'));
   const path = join(dir, 'fixture.jsonl');
   const previousPath = process.env.PATH;
-  t.after(async () => { process.env.PATH = previousPath; await rm(dir, { recursive: true, force: true }); });
+  t.after(async () => {
+    process.env.PATH = previousPath;
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+    await rm(dir, { recursive: true, force: true });
+  });
+  const originalReadFile = fs.readFile;
+  t.mock.method(os, 'homedir', () => dir);
+  t.mock.method(fs, 'readFile', (...args: Parameters<typeof readFile>) => args[0] === CONFIG_PATH ? Promise.resolve('{"baseUrl":"https://sessions.test"}') : originalReadFile(...args));
+  syncBuiltinESMExports();
   await writeFile(path, jsonl);
   let calls = 0;
   const fetch = t.mock.method(globalThis, 'fetch', async (_url: any, init: any) => {

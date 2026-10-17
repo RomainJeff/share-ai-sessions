@@ -14,15 +14,13 @@ import { CONFIG_PATH } from "./lib.ts";
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 
-test("manual sync uses server bytes after cache loss, handles 409/rewrite, and stop removes opt-in", async () => {
+async function syncFixture() {
   const temp = await mkdtemp(join(os.tmpdir(), "session-share-sync-"));
   const id = randomUUID();
   const path = join(temp, ".claude/projects/test", `${id}.jsonl`);
   const manifest = join(temp, ".claude/session-share/manifest.json");
   await mkdir(join(temp, ".claude/projects/test"), { recursive: true });
   const line = (value: string) => JSON.stringify({ type: "user", sessionId: id, message: { content: value } }) + "\n";
-  let text = line("départ 🦓");
-  await writeFile(path, text);
   const requests: { method: string; body: string; offset: string | undefined }[] = [];
   let serverBytes = 0;
   let serverHash: string | null = null;
@@ -47,7 +45,23 @@ test("manual sync uses server bytes after cache loss, handles 409/rewrite, and s
     serverHash = hash(lines.at(-1)! + "\n");
     return Response.json({ id, bytes: serverBytes });
   });
+  return {
+    id, path, manifest, line, requests,
+    conflictNextPatch: () => { conflict = true; },
+    cleanup: async () => {
+      mock.restoreAll();
+      syncBuiltinESMExports();
+      await rm(temp, { recursive: true, force: true });
+    },
+  };
+}
+
+test("manual sync uses server bytes after cache loss, handles 409/rewrite, and stop removes opt-in", async () => {
+  const fixture = await syncFixture();
+  const { id, path, manifest, line, requests } = fixture;
   try {
+    let text = line("départ 🦓");
+    await writeFile(path, text);
     const { confirmation } = await upload(path) as { confirmation: string };
     const result = await upload(path, { confirm: confirmation }) as { marker: string };
     assert.equal(result.marker, `share-session:opt-in ${id}`);
@@ -87,7 +101,7 @@ test("manual sync uses server bytes after cache loss, handles 409/rewrite, and s
     text += line("four");
     await writeFile(path, text);
     await writeFile(path, text + '{"partial":');
-    conflict = true;
+    fixture.conflictNextPatch();
     await sync([id]);
     assert.deepEqual(requests.slice(-2).map((r) => r.method), ["PATCH", "POST"]);
     assert.equal(requests.at(-1)!.body, text.replace(secret, "[REDACTED:github]"));
@@ -101,8 +115,51 @@ test("manual sync uses server bytes after cache loss, handles 409/rewrite, and s
     assert.deepEqual(await sync(["--all"]), []);
     assert.equal(JSON.parse(await readFile(manifest, "utf8")).sessions[id], undefined);
   } finally {
-    mock.restoreAll();
-    syncBuiltinESMExports();
-    await rm(temp, { recursive: true, force: true });
+    await fixture.cleanup();
+  }
+});
+
+test("sync recovers both strip flags from the last opt-in marker after manifest loss", async () => {
+  const fixture = await syncFixture();
+  const { id, path, manifest, line, requests } = fixture;
+  const strip = { stripThinking: true, stripToolResults: true };
+  const blocks = (type: string, content: object[]) => JSON.stringify({ type, sessionId: id, message: { content } }) + "\n";
+  try {
+    // An older, flagless marker must not override the latest upload's policy.
+    let text = line(`share-session:opt-in ${id}`)
+      + blocks("assistant", [{ type: "thinking", thinking: "original private reasoning" }, { type: "text", text: "départ 🦓" }])
+      + blocks("user", [{ type: "tool_result", tool_use_id: "original-tool", content: "original private result" }]);
+    await writeFile(path, text);
+    const { confirmation } = await upload(path, strip) as { confirmation: string };
+    assert.equal(typeof confirmation, "string");
+    assert.equal(requests.length, 0, "preview must not upload");
+    const { marker } = await upload(path, { ...strip, confirm: confirmation }) as { marker: string };
+    assert.equal(marker, `share-session:opt-in ${id} --strip-thinking --strip-tool-results`);
+    const uploaded = requests[0]!;
+    assert.equal(uploaded.method, "POST");
+    assert.ok(Buffer.byteLength(uploaded.body) < Buffer.byteLength(text), "server bytes must differ from source bytes");
+    assert.ok(!uploaded.body.includes("original private reasoning"));
+    assert.ok(!uploaded.body.includes("original private result"));
+    // Claude records the returned marker before the ephemeral manifest disappears.
+    text += line(marker);
+    await writeFile(path, text);
+    await rm(manifest);
+    text += blocks("assistant", [{ type: "thinking", thinking: "new private reasoning" }, { type: "text", text: "visible answer" }])
+      + blocks("user", [{ type: "tool_result", tool_use_id: "new-tool", content: "new private result" }]);
+    await writeFile(path, text);
+
+    await sync([id]);
+
+    assert.deepEqual(requests.map((request) => request.method), ["POST", "PATCH"], "recovery must append without a replacement upload");
+    const patch = requests[1]!;
+    assert.equal(patch.offset, String(Buffer.byteLength(uploaded.body)));
+    assert.equal(patch.body, line(marker)
+      + blocks("assistant", [{ type: "text", text: "visible answer" }])
+      + blocks("user", [{ type: "tool_result", tool_use_id: "new-tool", content: "[REDACTED:tool-result]" }]));
+    assert.ok(!patch.body.includes("new private reasoning"));
+    assert.ok(!patch.body.includes("new private result"));
+    assert.deepEqual(JSON.parse(await readFile(manifest, "utf8")).sessions[id].strip, strip);
+  } finally {
+    await fixture.cleanup();
   }
 });
