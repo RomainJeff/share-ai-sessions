@@ -20,7 +20,7 @@ migrations_dir = "./migrations"
 # allowlisted Access SaaS OIDC app. Secrets: BROKER_SIGNING_KEY (>=32 bytes), OIDC_CLIENT_SECRET.
 [[kv_namespaces]]
 binding = "OAUTH_KV"
-id = "00000000000000000000000000000000"
+id = "00000000000000000000000000000000" # title: claude-session-share-oauth
 
 [vars]
 OIDC_CLIENT_ID = "replace-with-access-saas-oidc-client-id"
