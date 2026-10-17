@@ -1,6 +1,8 @@
 import { identify, type Identity } from "./auth";
 import { createSession } from "./routes/sessions-create";
 import { listSessions } from "./routes/sessions-list";
+import { sessionListPage } from "./routes/ui-list";
+import { sessionDetailPage } from "./routes/ui-detail";
 
 type Handler = (request: Request, env: Env, who: Identity, params: Record<string, string>) => Promise<Response>;
 
@@ -8,6 +10,8 @@ type Handler = (request: Request, env: Env, who: Identity, params: Record<string
 const ROUTES: [method: string, pattern: URLPattern, handler: Handler][] = [
   ["POST", new URLPattern({ pathname: "/api/sessions" }), createSession],
   ["GET", new URLPattern({ pathname: "/api/sessions" }), listSessions],
+  ["GET", new URLPattern({ pathname: "/" }), sessionListPage],
+  ["GET", new URLPattern({ pathname: "/s/:id" }), sessionDetailPage],
 ];
 
 export default {
