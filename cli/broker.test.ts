@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SignJWT } from "jose";
-import { api } from "../../../.agents/skills/share-session/scripts/lib.ts";
+import { api } from "../skill/scripts/lib.ts";
 
 const key = new TextEncoder().encode("test-only-broker-key-at-least-32-bytes");
 const token = (iss = "https://sessions-mcp.example.com", exp = "10m") => new SignJWT({ scope: "read" })

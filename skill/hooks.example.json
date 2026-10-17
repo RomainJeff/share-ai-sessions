@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/skills/share-session/scripts/client.ts\" hook-stop",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
