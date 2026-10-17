@@ -16,6 +16,8 @@ async function fixture(t: TestContext) {
   const cwd = join(home, 'local.repo_à "quoted$&$$"\\path');
   const originalRead = fs.readFile;
   const entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT;
+  const codexEnv = Object.fromEntries(["CODEX_THREAD_ID", "CODEX_INTERNAL_ORIGINATOR_OVERRIDE", "CODEX_HOME", "CLAUDE_SESSION_ID"].map(k => [k, process.env[k]]));
+  for (const k of Object.keys(codexEnv)) delete process.env[k];
   const token = process.env.SESSION_TOKEN;
   delete process.env.SESSION_TOKEN;
   delete process.env.CLAUDE_CODE_ENTRYPOINT;
@@ -32,6 +34,7 @@ async function fixture(t: TestContext) {
     else process.env.CLAUDE_CODE_ENTRYPOINT = entrypoint;
     if (token === undefined) delete process.env.SESSION_TOKEN;
     else process.env.SESSION_TOKEN = token;
+    for (const [k, v] of Object.entries(codexEnv)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
     t.mock.restoreAll();
     syncBuiltinESMExports();
     await rm(home, { recursive: true, force: true });
@@ -139,4 +142,93 @@ test("pull refuses malformed transcripts and tool-result paths before writing a 
   f.bundle.jsonl = '{"unfinished":';
   await assert.rejects(main(["pull", f.id]), { code: "invalid_jsonl" });
   await assert.rejects(readFile(join(f.home, ".claude/session-share/manifest.json")), { code: "ENOENT" });
+});
+
+test("pull converts Claude history into a Codex rollout and keeps fork provenance on upload", async (t) => {
+  const f = await fixture(t);
+  const result = await main(["pull", f.id, "--harness", "codex"]) as { id: string; path: string; command: string; harness: string };
+  assert.equal(result.harness, "codex");
+  assert.equal(result.command, `codex resume ${result.id}`);
+  assert.ok(result.path.startsWith(join(f.home, ".codex/sessions")));
+  const rows = (await readFile(result.path, "utf8")).trim().split("\n").map(r => JSON.parse(r));
+  assert.equal(rows[0].type, "session_meta");
+  assert.equal(rows[0].payload.id, result.id);
+  assert.equal(rows[0].payload.cwd, f.cwd);
+  const messages = rows.filter(r => r.type === "response_item").map(r => r.payload);
+  assert.equal(messages[0].role, "user");
+  assert.ok(rows.some(r => r.type === "event_msg" && r.payload.type === "user_message"), "Codex needs UI events as well as model response items");
+  assert.ok(messages.some(r => JSON.stringify(r).includes("tool-1")));
+  assert.ok(messages.some(r => JSON.stringify(r).includes("result")));
+  assert.ok(!JSON.stringify(rows).includes('"signature"'));
+  const preview = await main(["upload", result.path]) as { confirmation: string };
+  await main(["upload", result.path, "--confirm", preview.confirmation]);
+  assert.equal(f.requests.at(-1)!.meta!.id, result.id);
+  assert.equal(f.requests.at(-1)!.meta!.forked_from, f.id);
+});
+
+function codexBundle(f: Awaited<ReturnType<typeof fixture>>) {
+  f.bundle.jsonl = [
+    { type: "session_meta", payload: { id: f.id, cwd: f.bundle.session.cwd_base, cli_version: "0.162.0", source: "cli", git: { branch: "feature" } } },
+    { type: "response_item", payload: { type: "additional_tools", tools: [{ name: "obsolete-registry" }] } },
+    { type: "turn_context", payload: { model: "gpt-6", cwd: "/old", approval_policy: "never" } },
+    { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "Fix the bug" }] } },
+    { type: "event_msg", payload: { type: "user_message", message: "Fix the bug" } },
+    { type: "response_item", payload: { type: "reasoning", encrypted_content: "private" } },
+    { type: "response_item", payload: { type: "function_call", name: "exec_command", arguments: JSON.stringify({ cmd: "pwd", cwd: f.bundle.session.cwd_base }), call_id: "c1" } },
+    { type: "response_item", payload: { type: "function_call_output", call_id: "c1", output: "output text" } },
+    { type: "response_item", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "Fixed" }] } },
+  ].map(r => JSON.stringify(r)).join("\n") + "\n";
+}
+
+test("pull converts Codex to Claude once, retaining tools as history and dropping source policies", async (t) => {
+  const f = await fixture(t);
+  codexBundle(f);
+  const result = await main(["pull", f.id, "--harness", "claude"]) as { id: string; path: string };
+  const text = await readFile(result.path, "utf8");
+  const rows = text.trim().split("\n").map(r => JSON.parse(r));
+  assert.equal(rows.filter(r => r.message?.content === "Fix the bug").length, 1);
+  assert.ok(rows.some(r => JSON.stringify(r.message).includes("exec_command")));
+  assert.ok(rows.some(r => JSON.stringify(r.message).includes("output text")));
+  assert.ok(rows.some(r => r.message?.content === "Fixed"));
+  assert.ok(rows.every(r => r.sessionId === result.id));
+  assert.ok(!text.includes("encrypted_content") && !text.includes("approval_policy"));
+  assert.ok(!text.includes("obsolete-registry"));
+});
+
+test("pull detects the current Codex harness and preserves native function calls", async (t) => {
+  const f = await fixture(t);
+  codexBundle(f);
+  process.env.CODEX_THREAD_ID = randomUUID();
+  const result = await main(["pull", f.id]) as { id: string; path: string; harness: string };
+  assert.equal(result.harness, "codex");
+  const rows = (await readFile(result.path, "utf8")).trim().split("\n").map(r => JSON.parse(r));
+  assert.equal(rows[0].payload.id, result.id);
+  const call = rows.find(r => r.payload?.type === "function_call");
+  assert.equal(JSON.parse(call.payload.arguments).cwd, f.cwd);
+  assert.ok(rows.some(r => r.payload?.type === "function_call" && r.payload.call_id === "c1"));
+  assert.ok(!rows.some(r => r.type === "turn_context" || r.payload?.type === "reasoning"));
+  const preview = await main(["upload", result.path]) as { confirmation: string };
+  await main(["upload", result.path, "--confirm", preview.confirmation]);
+  const meta = f.requests.at(-1)!.meta!;
+  assert.equal(meta.id, result.id);
+  assert.equal(meta.title, "Fix the bug");
+  assert.equal(meta.cwd_base, f.cwd);
+  assert.equal(meta.msg_count, 2);
+  assert.equal(meta.cc_version, "0.162.0");
+});
+
+test("Codex conversion resumes from the latest compaction replacement history", async (t) => {
+  const f = await fixture(t);
+  codexBundle(f);
+  f.bundle.jsonl += [
+    { type: "compacted", payload: { message: "", replacement_history: [
+      { type: "message", role: "user", content: [{ type: "input_text", text: "Compacted state: implementation agreed" }] },
+    ] } },
+    { type: "response_item", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "Work after compaction" }] } },
+  ].map(r => JSON.stringify(r)).join("\n") + "\n";
+  const result = await main(["pull", f.id, "--harness", "claude"]) as { path: string };
+  const text = await readFile(result.path, "utf8");
+  assert.ok(text.includes("Compacted state: implementation agreed"));
+  assert.ok(text.includes("Work after compaction"));
+  assert.ok(!text.includes("Fix the bug"), "superseded history must not be replayed alongside its replacement");
 });

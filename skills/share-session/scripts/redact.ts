@@ -54,15 +54,31 @@ export function redactJsonl(jsonl: string, options: RedactionOptions = {}) {
     if (typeof value === 'string') return text(value);
     if (Array.isArray(value)) return value.map(visit).filter(v => v !== undefined);
     if (!value || typeof value !== 'object') return value;
-    const thinking = value.type === 'thinking' || value.type === 'redacted_thinking';
+    const thinking = /^(thinking|redacted_thinking|reasoning|agent_reasoning(?:_raw_content)?)$/i.test(value.type ?? '');
     if (thinking && options.stripThinking) {
       thinkingRemoved++;
       return undefined;
+    }
+    if ((value.type === 'function_call_output' || value.type === 'custom_tool_call_output') && options.stripToolResults) {
+      toolResultsStripped++;
+      value = { ...value, output: '[REDACTED:tool-result]' };
+    }
+    if (options.stripToolResults && ['exec_command_end', 'patch_apply_end', 'mcp_tool_call_end', 'dynamic_tool_call_response', 'CommandExecution', 'McpToolCall', 'DynamicToolCall', 'FileChange', 'FunctionCallOutput'].includes(value.type)) {
+      toolResultsStripped++;
+      value = { ...value };
+      for (const key of ['stdout', 'stderr', 'aggregated_output', 'result', 'content', 'output']) {
+        if (key in value) value[key] = '[REDACTED:tool-result]';
+      }
     }
     if (value.type === 'tool_result' && options.stripToolResults) {
       toolResultsStripped++;
       // Retain the block and tool_use_id so pairing survives a read-only export.
       value = { ...value, content: '[REDACTED:tool-result]' };
+    }
+    if (value.type === 'reasoning' && value.encrypted_content) {
+      value = { ...value };
+      delete value.encrypted_content;
+      thinkingRemoved++;
     }
     const output: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(value)) {

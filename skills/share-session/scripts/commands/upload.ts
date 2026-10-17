@@ -1,3 +1,4 @@
+import { harnessOf, readerLine } from "../transcript.ts";
 import { createHash } from "node:crypto";
 import { parseArgs } from "node:util";
 import { readFile } from "node:fs/promises";
@@ -19,6 +20,14 @@ export function readMeta(jsonl: string, fileName: string) {
     } catch {
       // tolerate a truncated last line (session still being written)
     }
+  }
+  if (harnessOf(lines) === "codex") {
+    const meta = lines.find(l => l.type === "session_meta")!.payload;
+    const context = lines.filter(l => l.type === "turn_context").at(-1)?.payload;
+    const messages = lines.map(readerLine).filter(l => l && !l.isMeta && l.message?.content?.some((b: Line) => b.type === "text"));
+    const prompt = messages.find(l => l!.type === "user")?.message?.content?.find((b: Line) => b.type === "text")?.text;
+    return { id: meta.id, cwd: meta.cwd, branch: meta.git?.branch, cc_version: meta.cli_version,
+      model: context?.model, title: prompt?.slice(0, 80), msg_count: messages.length };
   }
   const last = (pick: (l: Line) => unknown) => lines.map(pick).filter((v) => typeof v === "string" && v).at(-1) as string | undefined;
   const firstPrompt = lines.find((l) => l.type === "user" && !l.isMeta && typeof l.message?.content === "string")?.message.content as string | undefined;

@@ -28,6 +28,9 @@ export async function doctor(): Promise<unknown> {
   } catch {
     // reported as null
   }
+  let codexVersion: string | null = null;
+  try { codexVersion = execFileSync("codex", ["--version"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch {}
+  const codexDir = join(process.env.CODEX_HOME || join(homedir(), ".codex"), "sessions");
   const projectsDir = join(homedir(), ".claude", "projects");
-  return { configured: true, authenticated: true, claude_version: claudeVersion, projects_dir: existsSync(projectsDir) ? projectsDir : null, stop_hook: stopHookInstalled() };
+  return { configured: true, authenticated: true, claude_version: claudeVersion, codex_version: codexVersion, codex_sessions_dir: existsSync(codexDir) ? codexDir : null, projects_dir: existsSync(projectsDir) ? projectsDir : null, stop_hook: stopHookInstalled() };
 }

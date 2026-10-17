@@ -1,3 +1,4 @@
+import { readerLine } from "../../skills/share-session/scripts/transcript";
 import type { Identity } from "../auth";
 import { atLeast, MEMBER, roleIn, VISIBLE, visibleSince } from "../db";
 import { getProjectSummaries } from "../navigation";
@@ -38,7 +39,7 @@ function content(value: unknown, technical = false): string {
   }).join("");
 }
 
-function renderRow({ raw, data }: TranscriptRecord): string {
+function renderRow({ raw, data }: TranscriptRecord, harness = "Claude"): string {
   const value = data.message?.content;
   const hasToolResult = Array.isArray(value) && value.some((b) => b?.type === "tool_result");
   const role = isHumanPrompt(data) ? "user" : data.type === "assistant" ? "assistant" :
@@ -50,7 +51,7 @@ function renderRow({ raw, data }: TranscriptRecord): string {
       ${content(value)}${rawHtml}</details></div></article>`;
   return `<article class="turn ${role === "user" ? "me" : "ai"}" data-role="${role}">
     <span class="avatar lg${role === "user" ? "" : " av-ai"}" aria-hidden="true">${role === "user" ? "U" : "C"}</span>
-    <div class="col"><div class="meta-l"><b>${role === "user" ? "Utilisateur" : "Claude"}</b>${time}</div>
+    <div class="col"><div class="meta-l"><b>${role === "user" ? "Utilisateur" : harness}</b>${time}</div>
       ${role === "tool" && !hasToolResult ? tool("Résultat", content(value, true)) : content(value)}${rawHtml}
     </div></article>`;
 }
@@ -95,13 +96,20 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
     if (!object) return page("Transcript indisponible", "<h1>Transcript indisponible</h1>", 503);
     jsonl += key.endsWith(".gz") ? await new Response(object.body.pipeThrough(new DecompressionStream("gzip"))).text() : await object.text();
   }
+  const harness = jsonl.split("\n").some(raw => { try { return JSON.parse(raw).type === "session_meta"; } catch { return false; } }) ? "Codex" : "Claude";
   const records: TranscriptRecord[] = [];
   let invalid = 0;
   const usages = new Map<string, Record<string, number>>();
   for (const raw of jsonl.split("\n")) {
     if (!raw.trim()) continue;
     try {
-      const data = JSON.parse(raw) as RecordLine;
+      const parsed = JSON.parse(raw);
+      if (parsed?.type === "event_msg" && parsed.payload?.type === "token_count") {
+        const total = parsed.payload.info?.total_token_usage;
+        if (total) usages.set("codex-total", { input_tokens: Number(total.input_tokens) || 0, output_tokens: Number(total.output_tokens) || 0 });
+      }
+      const data = readerLine(parsed) as RecordLine | undefined;
+      if (!data) continue;
       if (!data || typeof data !== "object") { invalid++; continue; }
       if (data.type === "assistant" && data.message?.id && data.message.usage) usages.set(data.message.id, data.message.usage);
       if (data.type === "user" || data.type === "assistant") records.push({ raw, data });
@@ -121,16 +129,16 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
       if (data.type === "assistant" && (typeof value === "string" ? value.trim() :
         Array.isArray(value) && value.some((b) => b?.type === "text" && typeof b.text === "string" && b.text.trim()))) final = i;
     }
-    if (prompt) conversation += renderRow(prompt);
+    if (prompt) conversation += renderRow(prompt, harness);
     const steps = records.slice(start, end).filter((_, i) => start + i !== final && !(prompt && i === 0));
     if (steps.length) {
       const elapsed = Date.parse(records[end - 1]!.data.timestamp || "") - Date.parse(prompt?.data.timestamp || "");
       const minutes = Math.floor(elapsed / 60000);
       const duration = minutes < 1 ? "moins d'une minute" : minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
       const label = Number.isFinite(elapsed) && elapsed >= 0 ? `A travaillé pendant ${duration}` : "Étapes intermédiaires";
-      conversation += `<details class="worked"><summary>${icon("chev")}<span>${e(label)} · ${steps.length} étape${steps.length === 1 ? "" : "s"}</span></summary><div>${steps.map(renderRow).join("")}</div></details>`;
+      conversation += `<details class="worked"><summary>${icon("chev")}<span>${e(label)} · ${steps.length} étape${steps.length === 1 ? "" : "s"}</span></summary><div>${steps.map(r => renderRow(r, harness)).join("")}</div></details>`;
     }
-    if (final >= 0) conversation += renderRow(records[final]!);
+    if (final >= 0) conversation += renderRow(records[final]!, harness);
   }
   const sourceRole = await roleIn(env, String(session.project), who.email);
   const canMove = sourceRole === "owner" || (session.owner_email === who.email && atLeast(sourceRole, "writer"));
@@ -169,14 +177,14 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
     <aside class="side" aria-label="Informations de la session">
       <details class="panel" data-meta open><summary>Informations<span class="tchev">${icon("chev")}</span></summary><div class="pb"><dl class="meta">
         ${meta("Auteur", session.owner_email)}${meta("Projet", session.project, true)}${meta("Repo", session.repo, true)}${meta("Branche", session.branch, true)}
-        ${meta("Dossier d’origine", session.cwd_base, true)}${meta("Modèle", model)}${meta("Claude Code", session.cc_version)}
+        ${meta("Dossier d’origine", session.cwd_base, true)}${meta("Modèle", model)}${meta(harness === "Codex" ? "Codex" : "Claude Code", session.cc_version)}
         <dt>Créée</dt><dd>${dateLabel(Number(session.created_at))}</dd>
         <dt>Mise à jour</dt><dd>${dateLabel(Number(session.updated_at))}</dd>
         <dt>Dernière synchro</dt><dd>${dateLabel(Number(session.last_synced_at))}</dd>
         ${meta("Messages", records.length)}${meta("Tokens", tokens)}${meta("Réponses API", usages.size)}${meta("Taille", `${Number(session.bytes)} octets`)}${meta("Identifiant", id, true)}
       </dl></div></details>
       <details class="panel"><summary>Commande de reprise<span class="tchev">${icon("chev")}</span></summary><div class="pb resume-help">
-        <p class="hint">Collez cette commande dans Claude Code, ouvert dans votre copie de <span class="mono">${e(session.repo || session.project)}</span>.</p>
+        <p class="hint">Collez cette commande dans Claude Code ou Codex, ouvert dans votre copie de <span class="mono">${e(session.repo || session.project)}</span>.</p>
         <div class="cmd"><code id="resume-command">${e(command)}</code></div>
         <p class="hint">La copie sera une nouvelle session à votre nom. Celle-ci reste intacte.</p>
       </div></details>

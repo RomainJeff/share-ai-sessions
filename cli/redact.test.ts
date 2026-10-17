@@ -82,3 +82,16 @@ test('masks multiline and escaped quoted passwords plus credential-bearing conne
     assert.ok(!result.jsonl.includes(secret), `${secret} leaked`);
   }
 });
+
+test('Codex strip policies cover encrypted reasoning and function/custom tool output', () => {
+  const rows = [
+    { type: 'response_item', payload: { type: 'reasoning', encrypted_content: 'opaque', summary: [] } },
+    { type: 'event_msg', payload: { type: 'item_completed', item: { type: 'Reasoning', raw_content: ['opaque'] } } },
+    { type: 'event_msg', payload: { type: 'exec_command_end', stdout: 'private output', aggregated_output: 'private output' } },
+    ...['function_call_output', 'custom_tool_call_output'].map(type => ({ type: 'response_item', payload: { type, call_id: 'c1', output: 'private output' } })),
+  ];
+  const result = redactJsonl(rows.map(r => JSON.stringify(r)).join('\n') + '\n', { stripThinking: true, stripToolResults: true });
+  assert.ok(!result.jsonl.includes('opaque'));
+  assert.ok(!result.jsonl.includes('private output'));
+  assert.ok(result.jsonl.includes('c1'));
+});

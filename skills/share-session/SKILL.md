@@ -1,11 +1,11 @@
 ---
 name: share-session
-description: Share a Claude Code session (JSONL) on Claude Session Share into a project you pick, list shared sessions by project, repo, author or title, sync new lines, stop syncing a session, move sessions between projects, or manage who can read or write them.
+description: Share or resume Claude Code and Codex sessions (JSONL), convert between harnesses on Claude Session Share into a project you pick, list shared sessions by project, repo, author or title, sync new lines, stop syncing a session, move sessions between projects, or manage who can read or write them.
 ---
 
 # Share Session
 
-Uploads Claude Code session transcripts to `sessions.example.com` (Cloudflare Worker behind Access) and lists them. Every call goes through the deterministic client:
+Uploads Claude Code and Codex session transcripts to `sessions.example.com` (Cloudflare Worker behind Access) and lists them. Every call goes through the deterministic client:
 
 ```bash
 node <skill dir>/scripts/client.ts <command>
@@ -54,7 +54,7 @@ Every session lives in exactly one **project**, chosen by the user, independent 
 
 | Role | Can |
 |------|-----|
-| `reader` | List, read in the browser, `pull` the project's sessions |
+| `reader` | List, read in the browser, `pull` the project's sessions into either harness |
 | `writer` | Reader + upload new sessions into the project and sync their own |
 | `owner` | Writer + add, change or remove members |
 
@@ -70,17 +70,17 @@ Every session lives in exactly one **project**, chosen by the user, independent 
 - Run authenticated operations only through `client.ts`. Never reproduce its requests with `curl`, `fetch`, or handcrafted Access headers.
 - Never write, print or quote an Access token. The client never stores one; `cloudflared` keeps its own cache in `~/.cloudflared/`.
 - The session owner is the email in the verified token, never something you pass.
-- `upload` scans every JSONL string (including attachments, rendered text and metadata) for secrets. Affected thinking blocks are removed; transcript lines and message links are retained. Regex scanning has limits: review the preview before sharing sensitive sessions.
+- `upload` scans every JSONL string (including attachments, rendered text and metadata) for secrets. Affected thinking blocks are removed; opaque Codex encrypted reasoning is always removed because it cannot be scanned; transcript lines and message links are retained. Regex scanning has limits: review the preview before sharing sensitive sessions.
 - Run `upload <path.jsonl> --project <slug>` first: it returns a local preview (target project, lines, replacements by type, sanitized JSONL bytes) and a `confirmation` hash, without authenticating or sending anything. Show the preview, including the project, and obtain explicit user agreement, then repeat with the same flags and `--confirm <hash>`. Confirm sends exactly the previewed bytes, so the live current session can be shared: lines appended since the preview go out with the next `sync`. Any rewrite of previewed content or option change requires a fresh preview and agreement. Never treat the hash itself as user consent.
 
 ## Commands
 
 | Command | Does |
 |---------|------|
-| `doctor` | Checks Node 24+, config, `cloudflared` token, API reachability, `claude --version`, `~/.claude/projects` |
+| `doctor` | Checks Node 24+, config, `cloudflared` token, API reachability, `claude --version`, `~/.claude/projects`, Codex version and sessions directory |
 | `upload <path.jsonl> [--project <slug>] [--strip-thinking] [--strip-tool-results] [--confirm <hash>]` | Previews, then uploads after consent. `--project` is required for a session's first upload (`project_required` otherwise) and omitted for re-uploads, forks and continuations, which inherit it. Strip flags remove thinking or inline tool-result payloads for a read-only share; keep the same flags when confirming. `repo` = `owner/repo` from the session cwd's `git remote get-url origin` (cwd basename otherwise) |
 | `sync <id>` / `sync --all` | Send complete new lines, redacted with the upload's strip policy, for one opted-in session or every manifest entry. Server bytes/hash of the sanitized stream decide the offset; conflict or rewritten prefix triggers a full replacement |
-| `stop <id>` / `stop current` | Remove the local manifest entry and record a stop tombstone, without deleting the remote session. Durable: hook and manual sync stay off until a new consented upload. Returns a `share-session:opt-out <id>` marker; keep it in the conversation. `current` requires `CLAUDE_SESSION_ID`; otherwise pass the id |
+| `stop <id>` / `stop current` | Remove the local manifest entry and record a stop tombstone, without deleting the remote session. Durable: hook and manual sync stay off until a new consented upload. Returns a `share-session:opt-out <id>` marker; keep it in the conversation. `current` uses `CLAUDE_SESSION_ID` or `CODEX_THREAD_ID`; otherwise pass the id |
 | `list [--project slug] [--repo owner/repo] [--author email] [--mine] [--q text]` | Live sessions (synced within 90 days) of your projects, newest first. Render as a compact table: id, title, project, repo, author, date, messages |
 | `move <id> --project <slug>` | Move an existing session; full UUID required. Cloud: use a `projects` token. |
 | `project list` | Your projects with your role, member and session counts |
@@ -89,11 +89,15 @@ Every session lives in exactly one **project**, chosen by the user, independent 
 | `project add <slug> <email> [--role reader\|writer\|owner]` | Owners: add a member, or change their role. Default `reader` |
 | `project remove <slug> <email>` | Owners: remove a member. Anyone: remove yourself |
 
-The current session's transcript is `~/.claude/projects/<cwd with every non-alphanumeric char replaced by ->/<session id>.jsonl`.
+Locate the current transcript using the current harness:
+- Claude Code: `~/.claude/projects/<cwd with every non-alphanumeric char replaced by ->/<CLAUDE_SESSION_ID>.jsonl`.
+- Codex: recursively find `rollout-*-<CODEX_THREAD_ID>.jsonl` under `${CODEX_HOME:-~/.codex}/sessions/`. If the ID is unavailable, locate candidates by their `session_meta.payload.cwd` and timestamp; verify the ID and subject before uploading. Never assume the rollout filename itself is the UUID.
+
+Upload and manual `sync` support both formats. The manifest/config remain shared under `~/.claude/session-share/` for compatibility. Automatic Stop-hook sync is currently Claude Code only; for Codex use manual `sync <id>` or `sync --all`. Do not install a Claude Stop hook into Codex configuration.
 
 ## Stop hook check
 
-`doctor` and a confirmed `upload` return `stop_hook`: whether `~/.claude/settings.json` or the project's `.claude/settings(.local).json` already runs `client.ts hook-stop` on Stop. When it is `false`, tell the user later lines will only go out with a manual `sync`, and offer once per conversation to add the hook (see "Automatic sync at turn end"). Edit the settings only after a yes. If they decline, do not offer again in that conversation.
+In Claude Code, `doctor` and a confirmed `upload` return `stop_hook`: whether `~/.claude/settings.json` or the project's `.claude/settings(.local).json` already runs `client.ts hook-stop` on Stop. When it is `false`, tell the user later lines will only go out with a manual `sync`, and offer once per conversation to add the hook (see "Automatic sync at turn end"). Edit the settings only after a yes. If they decline, do not offer again in that conversation. In Codex, this flag describes Claude configuration only: use manual sync and do not offer or install the Claude hook.
 
 ## Manual sync
 
@@ -107,7 +111,7 @@ Open the configured app URL for the five most recently synchronized sessions and
 
 Open `/s/<id>` to read the full conversation; the header returns to the project or filtered list you came from. Tools remain collapsed and token usage is deduplicated by `message.id`. **Membres** shows project membership read-only; owners manage it in `/projects/<slug>/settings`. **Détails → Changer de projet** performs an explicit move under the rights above.
 
-The **Reprendre** button copies `/share-session pull <id>` for use in Claude Code. The pull command is delivered by T05; the reader only copies the instruction.
+The **Reprendre** button copies `/share-session pull <id>` for use in Claude Code or Codex; the skill passes the current harness explicitly. The pull command is delivered by T05; the reader only copies the instruction.
 
 ## Errors
 
@@ -123,11 +127,21 @@ The **Reprendre** button copies `/share-session pull <id>` for use in Claude Cod
 - `confirmation_mismatch`: request a new preview and user agreement for the current content and options.
 - `invalid_jsonl`: an incomplete or malformed line was refused without sending it; retry once the transcript finishes writing.
 
-## Pull as a local fork (T05)
+## Pull as a local fork — Claude Code ↔ Codex
 
-`pull <id> [--target terminal|desktop]` downloads the bundle with a read token and creates a fresh session UUID under the current cwd's terminal history. It remaps both raw and encoded cwd paths, removes thinking with parent re-chaining, restores bundled tool-results, and appends an `isMeta` context note with provenance and a reminder to re-check paths, access and environment. The result includes `command: "claude --resume <newId>"`; show it for the user to run in a new terminal.
+`pull <id> [--harness claude|codex] [--target terminal|desktop]` downloads the native JSONL bundle and creates a fresh local session UUID under the current cwd. **Always pass `--harness` for the harness running you:** `codex` when invoked from Codex, `claude` from Claude Code. This uses your current runtime, independently of the source session or model. If invoked directly without the flag, the client detects Claude from `CLAUDE_CODE_ENTRYPOINT`/`CLAUDE_SESSION_ID`, Codex from `CODEX_THREAD_ID`/`CODEX_INTERNAL_ORIGINATOR_OVERRIDE`, and falls back to Claude when neither is available.
 
-The surface comes from `CLAUDE_CODE_ENTRYPOINT`; unknown/cloud entrypoints fall back to terminal. Desktop is pending HITL location/index verification and returns `unsupported_target`; use `--target terminal` to import to terminal history. No Desktop location is assumed.
+| Source → destination | Resume behavior |
+|---|---|
+| Claude → Claude | Native history, thinking removed with parent re-chaining |
+| Codex → Codex | Native response items and tool calls; source turn settings and reasoning removed |
+| Claude ↔ Codex | Text and supported images converted; tool calls/results retained as historical text, never replayed against another tool registry; thinking omitted |
+
+Claude imports go to `~/.claude/projects/<encoded current cwd>/<new UUID>.jsonl`, with `command: "claude --resume <newId>"`. Codex imports go to `${CODEX_HOME:-~/.codex}/sessions/YYYY/MM/DD/rollout-<timestamp>-<new UUID>.jsonl`, with `command: "codex resume <newId>"`. Show the returned command for the user to run in a new terminal. This command creates a local fork; it does not move the current chat or automatically start another model turn.
+
+Both destinations remap original cwd paths, restore bundled tool-results and append provenance with a reminder to re-check local paths, permissions and environment. Conversion keeps the available transcript, including compaction summaries; it cannot recover content already removed by the source harness or stripped when sharing. Runtime-specific non-message metadata is not portable.
+
+Only terminal import is supported. For Claude the surface comes from `CLAUDE_CODE_ENTRYPOINT`; unknown/cloud entrypoints fall back to terminal. `--target desktop` remains unsupported for both harnesses; use `--target terminal`. No Desktop database or location is assumed.
 
 Pull stores provenance in `manifest.forks` and leaves sync opt-in to a later consented upload. Upload the new transcript path using the normal preview/confirmation flow; in broker mode obtain a write token scoped to the **new** UUID. The client sends `forked_from`; the server validates that the original exists and derives its owner from D1. The fork stays in the original's project (the uploader needs `writer` there) and belongs to the uploader, and its detail page links back with “forké depuis”. The original remains intact.
 

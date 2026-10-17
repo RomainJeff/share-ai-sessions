@@ -18,6 +18,9 @@ export async function resolveSession(id: string): Promise<{ path: string; strip:
   const root = join(homedir(), ".claude/projects");
   const paths = (await readdir(root, { withFileTypes: true }).catch(() => []))
     .filter((dir) => dir.isDirectory()).map((dir) => join(root, dir.name, `${id}.jsonl`));
+  const codexRoot = join(process.env.CODEX_HOME || join(homedir(), ".codex"), "sessions");
+  const codexFiles = await readdir(codexRoot, { recursive: true, withFileTypes: true }).catch(() => []);
+  paths.push(...codexFiles.filter(f => f.isFile() && f.name.endsWith(`-${id}.jsonl`)).map(f => join(f.parentPath, f.name)));
   for (const path of paths) {
     const text = await readFile(path, "utf8").catch(() => "");
     // Last marker wins: an opt-out after the opt-in means stopped; an opt-in carries the latest strip policy.

@@ -406,3 +406,24 @@ describe("projects reader", () => {
     }
   });
 });
+
+it("reads Codex response items without duplicating event messages", async () => {
+  const id = await seed("Codex conversation", [
+    { type: "session_meta", payload: { id: crypto.randomUUID(), cwd: "/repo" } },
+    { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "Codex question" }] } },
+    { type: "event_msg", payload: { type: "user_message", message: "Codex question" } },
+    { type: "response_item", payload: { type: "function_call", call_id: "call-1", name: "exec_command", arguments: '{"cmd":"pwd"}' } },
+    { type: "response_item", payload: { type: "function_call_output", call_id: "call-1", output: "Codex output" } },
+    { type: "response_item", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "Codex final answer" }] } },
+    { type: "event_msg", payload: { type: "token_count", info: { total_token_usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150 } } } },
+  ]);
+  const html = await (await get(`/s/${id}`)).text();
+  const { inside, outside } = await workedParts(html);
+  expect(outside).toContain("Codex question");
+  expect(outside).toContain("Codex final answer");
+  expect(inside[0]).toContain("exec_command");
+  expect(inside[0]).toContain("Codex output");
+  expect(html.match(/data-role="user"/g)).toHaveLength(1);
+  expect(html).toContain("Claude Code ou Codex");
+  expect(html).toContain("150 tokens");
+});
