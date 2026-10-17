@@ -1,0 +1,28 @@
+{
+  "name": "claude-session-share",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "vitest run && npm run test:cli",
+    "test:cli": "node --test cli/*.test.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p cli"
+  },
+  "dependencies": {
+    "jose": "^6.2.10"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20260822.1",
+    "@types/node": "^24.13.3",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.0.0"
+  },
+  "allowScripts": {
+    "workerd@1.20260815.1": true,
+    "workerd@1.20261012.1": true,
+    "esbuild@0.28.1": true,
+    "esbuild@0.28.2": true
+  }
+}

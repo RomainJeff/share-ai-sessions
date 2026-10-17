@@ -1,0 +1,25 @@
+name = "claude-session-share"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+# Access protects the custom domain, not workers.dev.
+workers_dev = false
+routes = [{ pattern = "sessions.example.com", custom_domain = true }]
+
+[[r2_buckets]]
+binding = "SESSIONS"
+# Not created yet (T12): `wrangler r2 bucket create claude-session-share`.
+bucket_name = "claude-session-share"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "claude-session-share"
+# Placeholder until `wrangler d1 create claude-session-share` (T12).
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "./migrations"
+
+[vars]
+# Public identifiers, not secrets.AUD is a placeholder
+# until the Access app for sessions.example.com exists (T00).
+ACCESS_TEAM_DOMAIN = "example.cloudflareaccess.com"
+ACCESS_AUD = "replace-with-sessions-access-app-aud"
