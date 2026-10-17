@@ -18,7 +18,110 @@ async function seed(title: string, records: unknown[] = [], project = "acme/repo
   return id;
 }
 
+async function workedParts(html: string) {
+  const inside: string[] = [];
+  await new HTMLRewriter().on("details.worked", {
+    element() { inside.push(""); },
+    text(chunk) { inside[inside.length - 1] += chunk.text; },
+  }).transform(new Response(html)).text();
+  const outside = await new HTMLRewriter().on("details.worked", {
+    element(element) { element.remove(); },
+  }).transform(new Response(html)).text();
+  return { inside, outside };
+}
+
 describe("web reader", () => {
+  it("collapses intermediate rows and their raw JSON before the final timed answer", async () => {
+    const id = await seed("Worked turn", [
+      { type: "user", timestamp: "2026-10-17T10:00:00Z", message: { content: "Human question" } },
+      { type: "assistant", message: { content: [{ type: "thinking", thinking: "Private reasoning" }] } },
+      { type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: { file: "demo.txt" } }] } },
+      { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "read-id", content: "Read output" }] } },
+      { type: "user", isMeta: true, message: { content: "Injected context" } },
+      { type: "assistant", message: { content: "Progress update" } },
+      { type: "assistant", timestamp: "2026-10-17T10:10:00Z", message: { content: [{ type: "text", text: "Final answer" }] } },
+      { type: "user", isMeta: true, timestamp: "2026-10-17T10:12:00Z", message: { content: "Trailing context" } },
+    ]);
+    const html = await (await get(`/s/${id}`)).text();
+    const { inside, outside } = await workedParts(html);
+    expect(html.match(/<details class="worked"[^>]*>/g)).toEqual(['<details class="worked">']);
+    expect(inside).toHaveLength(1);
+    expect(inside[0]).toContain("A travaillé pendant 12 min · 6 étapes");
+    for (const text of ["Private reasoning", "Outil : Read", "Read output", "Injected context", "Progress update", "Trailing context"]) {
+      expect(inside[0]).toContain(text);
+      expect(outside).not.toContain(text);
+    }
+    expect(inside[0]!.match(/JSON brut/g)).toHaveLength(6);
+    for (const text of ["Human question", "Final answer"]) {
+      expect(inside[0]).not.toContain(text);
+      expect(outside).toContain(text);
+    }
+    expect(outside).toContain('<time datetime="2026-10-17T10:10:00.000Z"');
+    expect(html.indexOf('class="worked"')).toBeLessThan(html.indexOf("Final answer"));
+  });
+
+  it("groups the preamble and interrupted turns, but leaves direct answers unwrapped", async () => {
+    const id = await seed("Turn boundaries", [
+      { type: "user", isMeta: true, message: { content: "Session preamble" } },
+      { type: "assistant", message: { content: "Preamble text" } },
+      { type: "user", timestamp: "2026-10-17T10:00:00Z", message: { content: "Interrupted question" } },
+      { type: "assistant", timestamp: "2026-10-17T10:00:30Z", message: { content: [{ type: "thinking", thinking: "Unfinished work" }, { type: "tool_use", name: "PendingTool", input: {} }, { type: "text", text: "  " }] } },
+      { type: "user", message: { content: "Direct question" } },
+      { type: "assistant", message: { content: "Direct answer" } },
+    ]);
+    const { inside, outside } = await workedParts(await (await get(`/s/${id}`)).text());
+    expect(inside).toHaveLength(2);
+    expect(inside[0]).toContain("Étapes intermédiaires · 2 étapes");
+    expect(inside[0]).toContain("Session preamble");
+    expect(inside[0]).toContain("Preamble text");
+    expect(inside[1]).toMatch(/A travaillé pendant moins d(?:'|&#39;)une minute · 1 étape/);
+    expect(inside[1]).toContain("Unfinished work");
+    expect(inside[1]).toContain("PendingTool");
+    expect(outside).not.toContain("Unfinished work");
+    expect(outside).not.toContain("PendingTool");
+    for (const text of ["Interrupted question", "Direct question", "Direct answer"]) expect(outside).toContain(text);
+    const direct = await seed("Direct only", [
+      { type: "user", message: { content: "Question" } },
+      { type: "assistant", message: { content: "Answer" } },
+    ]);
+    expect(await (await get(`/s/${direct}`)).text()).not.toContain('<details class="worked">');
+  });
+
+  it.each([
+    [undefined, "2026-10-17T11:05:00Z", "Étapes intermédiaires"],
+    ["2026-10-17T10:00:00Z", undefined, "Étapes intermédiaires"],
+    ["invalid", "2026-10-17T11:05:00Z", "Étapes intermédiaires"],
+    ["2026-10-17T10:00:00Z", "invalid", "Étapes intermédiaires"],
+    ["2026-10-17T10:00:00Z", "2026-10-17T11:05:00Z", "A travaillé pendant 1 h 05"],
+  ])("labels work with timestamps %s → %s", async (start, end, label) => {
+    const id = await seed("Timing", [
+      { type: "user", timestamp: start, message: { content: "Question" } },
+      { type: "assistant", message: { content: "Intermediate" } },
+      { type: "assistant", timestamp: end, message: { content: "Final" } },
+    ]);
+    const { inside } = await workedParts(await (await get(`/s/${id}`)).text());
+    expect(inside).toHaveLength(1);
+    expect(inside[0]).toContain(`${label} · 1 étape`);
+  });
+
+  it("keeps full-turn timing and final-answer visibility across 100-record pages", async () => {
+    const id = await seed("Paged turn", [
+      { type: "user", timestamp: "2026-10-17T10:00:00Z", message: { content: "Long question" } },
+      ...Array.from({ length: 100 }, (_, n) => ({ type: "assistant", timestamp: "2026-10-17T10:01:00Z", message: { content: `Progress ${n}` } })),
+      { type: "assistant", timestamp: "2026-10-17T10:12:00Z", message: { content: "Paged final" } },
+    ]);
+    for (const [page, steps] of [[1, 99], [2, 1]]) {
+      const html = await (await get(`/s/${id}?page=${page}`)).text();
+      const { inside, outside } = await workedParts(html);
+      expect(inside).toHaveLength(1);
+      expect(inside[0]).toContain(`A travaillé pendant 12 min · ${steps} étape${steps === 1 ? "" : "s"}`);
+      expect(outside).not.toContain("Progress ");
+      expect(outside.includes("Paged final")).toBe(page === 2);
+      expect(html.match(/<article /g)).toHaveLength(page === 1 ? 100 : 2);
+      expect(html).toContain(`href="?page=${page === 1 ? 2 : 1}"`);
+    }
+  });
+
   it("filters title/summary, project, author and inclusive UTC period, newest first", async () => {
     const older = await seed("Older hit");
     const newer = await seed("Newer hit");

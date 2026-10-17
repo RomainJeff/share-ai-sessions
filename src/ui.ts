@@ -173,13 +173,15 @@ dl.meta dd{margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .turn.me .bubble{background:hsl(var(--primary));color:hsl(var(--primary-foreground))}
 .turn.ai .bubble{background:hsl(var(--muted));color:hsl(var(--foreground));align-self:flex-start}
 
-details.reason{font-size:14px;min-width:0}
-details.reason>summary{cursor:pointer;color:hsl(var(--muted-foreground));display:inline-flex;gap:6px;align-items:center;list-style:none;font-size:13px;font-weight:500;min-height:44px;padding:0 10px 0 6px;margin-left:-6px;border-radius:calc(var(--radius) - 2px)}
-details.reason>summary:hover{background:hsl(var(--accent));color:hsl(var(--foreground))}
-details.reason>summary::-webkit-details-marker{display:none}
-details.reason>summary svg{width:14px;height:14px;transition:transform .2s}
-details.reason[open]>summary svg{transform:rotate(180deg)}
+details.reason,details.worked{font-size:14px;min-width:0}
+details:is(.reason,.worked)>summary{cursor:pointer;color:hsl(var(--muted-foreground));display:inline-flex;gap:6px;align-items:center;list-style:none;font-size:13px;font-weight:500;min-height:44px;padding:0 10px 0 6px;margin-left:-6px;border-radius:calc(var(--radius) - 2px)}
+details:is(.reason,.worked)>summary:hover{background:hsl(var(--accent));color:hsl(var(--foreground))}
+details:is(.reason,.worked)>summary::-webkit-details-marker{display:none}
+details:is(.reason,.worked)>summary svg{width:14px;height:14px;transition:transform .2s}
+details:is(.reason,.worked)[open]>summary svg{transform:rotate(180deg)}
 details.reason .rtxt{border-left:2px solid hsl(var(--border));padding:4px 0 4px 14px;color:hsl(var(--muted-foreground));white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px;line-height:1.6}
+
+details.worked>div{display:flex;flex-direction:column;gap:20px;padding-top:12px;min-width:0}
 
 details.tool{border:1px solid hsl(var(--border));border-radius:var(--radius);background:hsl(var(--card));min-width:0;width:100%}
 details.tool>summary{list-style:none;cursor:pointer;min-height:52px;padding:8px 12px 8px 8px;display:flex;gap:10px;align-items:center;min-width:0;border-radius:var(--radius)}
@@ -259,7 +261,7 @@ body.has-js .filters:not([open]){display:none}
   .field{font-size:14px}
   .search .i{top:12px}
   .brand,.barback{min-height:36px}
-  details.reason>summary{min-height:32px}
+  details:is(.reason,.worked)>summary{min-height:32px}
   details.tool>summary{min-height:48px}
   .panel>summary{min-height:44px}
   .detail{display:grid;grid-template-columns:minmax(0,1fr) 320px;grid-template-areas:"head head" "chat side";gap:24px;align-items:start}

@@ -4,6 +4,8 @@ import { author, dateLabel, escapeHtml as e, icon, page } from "../ui";
 
 type RecordLine = { type?: string; timestamp?: string; isMeta?: boolean; isCompactSummary?: boolean; toolUseResult?: unknown; message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, number> } };
 
+type TranscriptRecord = { raw: string; data: RecordLine };
+
 /** Claude Code also uses user records for tool results and injected context. */
 function isHumanPrompt(data: RecordLine): boolean {
   if (data.type !== "user" || data.isMeta || data.isCompactSummary || "toolUseResult" in data) return false;
@@ -35,6 +37,23 @@ function content(value: unknown, technical = false): string {
   }).join("");
 }
 
+function renderRow({ raw, data }: TranscriptRecord): string {
+  const value = data.message?.content;
+  const hasToolResult = Array.isArray(value) && value.some((b) => b?.type === "tool_result");
+  const role = isHumanPrompt(data) ? "user" : data.type === "assistant" ? "assistant" :
+    hasToolResult || "toolUseResult" in data ? "tool" : "system";
+  const rawHtml = `<details class="reason raw"><summary>${icon("chev")}JSON brut</summary><pre class="code">${e(raw)}</pre></details>`;
+  const time = data.timestamp ? dateLabel(data.timestamp) : "";
+  if (role === "system") return `<article class="turn system" data-role="system"><div class="col">
+    <details class="reason context"><summary>${icon("chev")}Contexte ${time}</summary>
+      ${content(value)}${rawHtml}</details></div></article>`;
+  return `<article class="turn ${role === "user" ? "me" : "ai"}" data-role="${role}">
+    <span class="avatar lg${role === "user" ? "" : " av-ai"}" aria-hidden="true">${role === "user" ? "U" : "C"}</span>
+    <div class="col"><div class="meta-l"><b>${role === "user" ? "Utilisateur" : "Claude"}</b>${time}</div>
+      ${role === "tool" && !hasToolResult ? tool("Résultat", content(value, true)) : content(value)}${rawHtml}
+    </div></article>`;
+}
+
 /** GET /s/:id — metadata is retention-checked before reading any transcript from R2. */
 export async function sessionDetailPage(request: Request, env: Env, who: Identity, params: Record<string, string>): Promise<Response> {
   const id = params.id!;
@@ -57,7 +76,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
     if (!object) return page("Transcript indisponible", "<h1>Transcript indisponible</h1>", 503);
     jsonl += key.endsWith(".gz") ? await new Response(object.body.pipeThrough(new DecompressionStream("gzip"))).text() : await object.text();
   }
-  const records: { raw: string; data: RecordLine }[] = [];
+  const records: TranscriptRecord[] = [];
   let invalid = 0;
   const usages = new Map<string, Record<string, number>>();
   for (const raw of jsonl.split("\n")) {
@@ -74,6 +93,32 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
   const requested = Number(new URL(request.url).searchParams.get("page")) || 1;
   const lastPage = Math.max(1, Math.ceil(records.length / 100));
   const current = Math.min(lastPage, Math.max(1, Math.floor(requested)));
+  let conversation = "";
+  for (let start = 0, end = 0; start < records.length; start = end) {
+    end = start + 1;
+    while (end < records.length && !isHumanPrompt(records[end]!.data)) end++;
+    const from = Math.max(start, (current - 1) * 100), to = Math.min(end, current * 100);
+    if (from >= to) continue;
+    const prompt = isHumanPrompt(records[start]!.data) ? records[start] : undefined;
+    let final = -1;
+    if (prompt) for (let i = start + 1; i < end; i++) {
+      const { data } = records[i]!;
+      const value = data.message?.content;
+      if (data.type === "assistant" && (typeof value === "string" ? value.trim() :
+        Array.isArray(value) && value.some((b) => b?.type === "text" && typeof b.text === "string" && b.text.trim()))) final = i;
+    }
+    if (prompt && from === start) conversation += renderRow(prompt);
+    const steps = records.slice(from, to).filter((_, i) => from + i !== final && !(prompt && from + i === start));
+    if (steps.length) {
+      // Turn endpoints and final answer come from the full transcript, even across pages.
+      const elapsed = Date.parse(records[end - 1]!.data.timestamp || "") - Date.parse(prompt?.data.timestamp || "");
+      const minutes = Math.floor(elapsed / 60000);
+      const duration = minutes < 1 ? "moins d'une minute" : minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
+      const label = Number.isFinite(elapsed) && elapsed >= 0 ? `A travaillé pendant ${duration}` : "Étapes intermédiaires";
+      conversation += `<details class="worked"><summary>${icon("chev")}<span>${e(label)} · ${steps.length} étape${steps.length === 1 ? "" : "s"}</span></summary><div>${steps.map(renderRow).join("")}</div></details>`;
+    }
+    if (final >= from && final < to) conversation += renderRow(records[final]!);
+  }
   const command = `/share-session pull ${id}`;
   const model = session.model || records.find((r) => r.data.message?.model)?.data.message?.model;
   const meta = (label: string, value: unknown, mono = false) => value == null || value === "" ? "" : `<dt>${label}</dt><dd${mono ? ' class="mono"' : ""}>${e(value)}</dd>`;
@@ -108,22 +153,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
     </aside>
     <section class="chat" aria-label="Conversation"><h2 class="chat-title">Conversation</h2>
       ${invalid ? `<p class="ro-note">${invalid} ligne(s) JSONL invalide(s) ignorée(s).</p>` : ""}
-      ${records.slice((current - 1) * 100, current * 100).map(({ raw, data }) => {
-        const value = data.message?.content;
-        const hasToolResult = Array.isArray(value) && value.some((b) => b?.type === "tool_result");
-        const role = isHumanPrompt(data) ? "user" : data.type === "assistant" ? "assistant" :
-          hasToolResult || "toolUseResult" in data ? "tool" : "system";
-        const rawHtml = `<details class="reason raw"><summary>${icon("chev")}JSON brut</summary><pre class="code">${e(raw)}</pre></details>`;
-        const time = data.timestamp ? dateLabel(data.timestamp) : "";
-        if (role === "system") return `<article class="turn system" data-role="system"><div class="col">
-          <details class="reason context"><summary>${icon("chev")}Contexte ${time}</summary>
-            ${content(value)}${rawHtml}</details></div></article>`;
-        return `<article class="turn ${role === "user" ? "me" : "ai"}" data-role="${role}">
-          <span class="avatar lg${role === "user" ? "" : " av-ai"}" aria-hidden="true">${role === "user" ? "U" : "C"}</span>
-          <div class="col"><div class="meta-l"><b>${role === "user" ? "Utilisateur" : "Claude"}</b>${time}</div>
-            ${role === "tool" && !hasToolResult ? tool("Résultat", content(value, true)) : content(value)}${rawHtml}
-          </div></article>`;
-      }).join("") || '<p class="empty">Aucun message.</p>'}
+      ${conversation || '<p class="empty">Aucun message.</p>'}
       <nav class="pagination" aria-label="Pagination de la conversation">${current > 1 ? `<a class="btn" href="?page=${current - 1}">Précédent</a>` : ""}<span>Page ${current} / ${lastPage}</span>${current < lastPage ? `<a class="btn" href="?page=${current + 1}">Suivant</a>` : ""}</nav>
     </section></div>`, 200, true);
 }
