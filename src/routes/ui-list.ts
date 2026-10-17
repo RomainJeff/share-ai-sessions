@@ -24,7 +24,7 @@ export async function sessionListPage(request: Request, env: Env): Promise<Respo
   }
   const requested = Number(params.get("page"));
   const current = Number.isSafeInteger(requested) && requested > 0 ? requested : 1;
-  const { results } = await env.DB.prepare(`SELECT id, title, summary, project, branch, owner_email, owner_name, updated_at, model, msg_count, forked_from, forked_from_owner
+  const { results } = await env.DB.prepare(`SELECT id, title, summary, project, branch, owner_email, owner_name, updated_at, model, msg_count, forked_from, forked_from_owner, continued_from
     FROM sessions WHERE ${where.join(" AND ")} ORDER BY updated_at DESC, id LIMIT 101 OFFSET ?`)
     .bind(...binds, (current - 1) * 100).all<Record<string, string | number | null>>();
   const link = (n: number, label: string) => {
@@ -58,6 +58,7 @@ export async function sessionListPage(request: Request, env: Env): Promise<Respo
           ${s.branch ? `<span>${icon("branch")}<span class="mono">${e(s.branch)}</span></span>` : ""}
           ${s.msg_count ? `<span>${icon("chat")}${e(s.msg_count)} messages</span>` : ""}
           ${s.model ? `<span>${icon("chip")}<span>${e(s.model)}</span></span>` : ""}</div>
+        ${s.continued_from ? `<div class="foot"><span class="badge">${icon("branch")}suite d’une session compactée</span></div>` : ""}
         ${s.forked_from ? `<div class="foot"><span class="badge">${icon("branch")}fork de la session de ${e(s.forked_from_owner || s.forked_from)}</span></div>` : ""}
       </a>`).join("") || '<p class="empty">Aucune session trouvée.</p>'}
     </section>

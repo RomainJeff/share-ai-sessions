@@ -7,7 +7,13 @@ import type { RedactionOptions } from "./redact.ts";
 
 // offset/last_line_hash describe the local source; the server holds sanitized bytes, compared by sync.
 export type Entry = { id: string; path: string; offset: number; last_line_hash: string; url: string; strip?: RedactionOptions };
-type Manifest = { sessions: Record<string, Entry>; forks?: Record<string, { forked_from: string }>; stopped?: Record<string, string> };
+type Manifest = {
+  sessions: Record<string, Entry>;
+  forks?: Record<string, { forked_from: string }>;
+  /** Compaction continuations already proposed for sharing; presence means "asked once", not consent. */
+  continuations?: Record<string, { continued_from: string }>;
+  stopped?: Record<string, string>;
+};
 const manifestPath = () => join(homedir(), ".claude/session-share/manifest.json");
 
 export async function readManifest(): Promise<Manifest> {

@@ -62,3 +62,23 @@ it("rejects invalid, missing, self or changed origins before writing session dat
   expect((await upload(alice, { id, forked_from: other })).status).toBe(400);
   expect(await (await get(alice, `/api/sessions/${id}/bundle`)).text()).toBe("{}\n");
 });
+
+it("links a compaction continuation to the owner's parent session, both ways in the reader", async () => {
+  const alice = await mintJwt({ email: ALICE, name: "Alice" });
+  const bob = await mintJwt({ email: BOB, name: "Bob" });
+  const parent = crypto.randomUUID();
+  const next = crypto.randomUUID();
+  expect((await upload(alice, { id: parent })).status).toBe(201);
+  // Only the parent's owner can claim a continuation of it.
+  expect((await upload(bob, { id: next, continued_from: parent })).status).toBe(400);
+  for (const value of [crypto.randomUUID(), "nope", next]) expect((await upload(alice, { id: next, continued_from: value })).status).toBe(400);
+  expect(await env.DB.prepare("SELECT id FROM sessions WHERE id = ?").bind(next).first()).toBeNull();
+  expect((await upload(alice, { id: next, continued_from: parent })).status).toBe(201);
+  // A full replacement without the field keeps the link; another parent is refused.
+  expect((await upload(alice, { id: next })).status).toBe(200);
+  expect((await upload(alice, { id: next, continued_from: crypto.randomUUID() })).status).toBe(400);
+  expect(await env.DB.prepare("SELECT continued_from FROM sessions WHERE id = ?").bind(next).first()).toEqual({ continued_from: parent });
+  expect(await (await get(bob, `/s/${next}`)).text()).toContain(`suite de <a href="/s/${parent}">`);
+  expect(await (await get(bob, `/s/${parent}`)).text()).toContain(`suite dans <a href="/s/${next}">`);
+  expect(await (await get(bob, "/")).text()).toContain("suite d’une session compactée");
+});

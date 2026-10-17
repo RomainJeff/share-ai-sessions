@@ -49,8 +49,8 @@ export function sanitize(jsonl: string, options: RedactionOptions = {}) {
 
 async function prepare(path: string, jsonl: string, options: RedactionOptions) {
   const { cwd, ...meta } = readMeta(jsonl, path);
-  const fork = (await readManifest()).forks?.[meta.id];
-  const body = { ...meta, cwd_base: cwd, project: detectProject(cwd ?? process.cwd()), ...fork };
+  const { forks, continuations } = await readManifest();
+  const body = { ...meta, cwd_base: cwd, project: detectProject(cwd ?? process.cwd()), ...forks?.[meta.id], ...continuations?.[meta.id] };
   return { id: meta.id, redacted: sanitize(jsonl, options), metadata: redactJsonl(JSON.stringify(body)) };
 }
 

@@ -21,6 +21,7 @@ async function syncFixture() {
   await mkdir(join(temp, ".claude/projects/test"), { recursive: true });
   const line = (value: string) => JSON.stringify({ type: "user", sessionId: id, message: { content: value } }) + "\n";
   let remote = "";
+  let meta = "";
   let fetches = 0;
   let authCalls = 0;
   let tokenMissing = false;
@@ -53,6 +54,7 @@ async function syncFixture() {
       remote += body;
     } else {
       assert.equal(method, "POST");
+      meta = String((init.body as FormData).get("meta"));
       remote = body;
     }
     return Response.json({ id, bytes: Buffer.byteLength(remote) });
@@ -60,6 +62,7 @@ async function syncFixture() {
   return {
     temp, id, path, manifest, line,
     remote: () => remote,
+    meta: () => meta,
     /** Manifest entry as left by a consented upload; the only opt-in the hook honours. */
     optIn: async (strip = {}) => {
       await mkdir(join(temp, ".claude/session-share"), { recursive: true });
@@ -254,5 +257,58 @@ test("hook-stop executable exits zero without the usual CLI result envelope", as
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout, "");
     assert.equal(result.stderr, "");
+  } finally { await f.cleanup(); }
+});
+
+test("a compaction continuation of a shared session blocks once to ask consent, then uploads linked", async () => {
+  const f = await syncFixture();
+  try {
+    const boundary = randomUUID();
+    const system = (sessionId: string) => JSON.stringify({ type: "system", subtype: "compact_boundary", uuid: boundary, sessionId }) + "\n";
+    await writeFile(f.path, f.line("before compaction") + system(f.id));
+    await f.optIn({ stripThinking: true });
+    const child = randomUUID();
+    const childPath = join(f.temp, ".claude/projects/test", `${child}.jsonl`);
+    await writeFile(childPath, JSON.stringify({ type: "custom-title", sessionId: child }) + "\n" + system(child) + f.line("after compaction"));
+    const stopChild = (active = false) => f.invoke(active, childPath, JSON.stringify({ session_id: child, transcript_path: childPath, stop_hook_active: active }));
+
+    const decision = JSON.parse((await stopChild()).stdout);
+    assert.equal(decision.decision, "block");
+    assert.ok(decision.reason.includes(`continues shared session ${f.id}`));
+    assert.ok(decision.reason.includes(`upload ${JSON.stringify(childPath)} --strip-thinking`));
+    assert.match(decision.reason, /explicit consent/);
+    assert.deepEqual(await stopChild(), { stdout: "", stderr: "" }, "asked once");
+    assert.equal(f.fetches(), 0);
+    assert.equal(f.authCalls(), 0);
+    assert.equal(JSON.parse(await readFile(f.manifest, "utf8")).sessions[child], undefined, "asking is not consent");
+
+    const { confirmation } = await upload(childPath, { stripThinking: true }) as { confirmation: string };
+    await upload(childPath, { stripThinking: true, confirm: confirmation });
+    assert.equal(JSON.parse(f.meta()).continued_from, f.id);
+  } finally { await f.cleanup(); }
+});
+
+test("continuation detection ignores non-boundary starts, quoted uuids and stopped sessions", async () => {
+  const f = await syncFixture();
+  try {
+    const boundary = randomUUID();
+    await writeFile(f.path, JSON.stringify({ type: "system", subtype: "compact_boundary", uuid: boundary, sessionId: f.id }) + "\n");
+    await f.optIn();
+    const child = randomUUID();
+    const childPath = join(f.temp, ".claude/projects/test", `${child}.jsonl`);
+    const stopChild = () => f.invoke(false, childPath, JSON.stringify({ session_id: child, transcript_path: childPath }));
+    // A user line quoting the boundary uuid first: not a continuation.
+    await writeFile(childPath, JSON.stringify({ type: "user", uuid: randomUUID(), sessionId: child, message: { content: `"uuid":"${boundary}"` } }) + "\n");
+    assert.deepEqual(await stopChild(), { stdout: "", stderr: "" });
+    // A boundary unknown to any shared transcript.
+    await writeFile(childPath, JSON.stringify({ type: "system", subtype: "compact_boundary", uuid: randomUUID(), sessionId: child }) + "\n");
+    assert.deepEqual(await stopChild(), { stdout: "", stderr: "" });
+    // A real continuation the user already stopped sharing.
+    await writeFile(childPath, JSON.stringify({ type: "system", subtype: "compact_boundary", uuid: boundary, sessionId: child }) + "\n");
+    const manifest = JSON.parse(await readFile(f.manifest, "utf8"));
+    await writeFile(f.manifest, JSON.stringify({ ...manifest, stopped: { [child]: new Date().toISOString() } }));
+    assert.deepEqual(await stopChild(), { stdout: "", stderr: "" });
+    assert.equal(JSON.parse(await readFile(f.manifest, "utf8")).continuations, undefined);
+    assert.equal(f.fetches(), 0);
   } finally { await f.cleanup(); }
 });

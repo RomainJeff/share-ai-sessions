@@ -32,9 +32,9 @@ export async function createSession(request: Request, env: Env, who: Identity): 
   }
 
   // Ownership ignores retention: an expired session still belongs to its owner.
-  const existing = await env.DB.prepare("SELECT owner_email, created_at, forked_from FROM sessions WHERE id = ?")
+  const existing = await env.DB.prepare("SELECT owner_email, created_at, forked_from, continued_from FROM sessions WHERE id = ?")
     .bind(id)
-    .first<{ owner_email: string; created_at: number; forked_from: string | null }>();
+    .first<{ owner_email: string; created_at: number; forked_from: string | null; continued_from: string | null }>();
   if (existing && existing.owner_email !== who.email) {
     return Response.json({ error: "forbidden" }, { status: 403 });
   }
@@ -53,6 +53,20 @@ export async function createSession(request: Request, env: Env, who: Identity): 
     const origin = await env.DB.prepare("SELECT owner_email FROM sessions WHERE id = ?").bind(forkedFrom).first<{ owner_email: string }>();
     if (!origin) return Response.json({ error: "forked_from session does not exist" }, { status: 400 });
     forkedFromOwner = origin.owner_email;
+  }
+
+  // A compaction continuation links to the uploader's own parent session; like a fork, the link is set once.
+  let continuedFrom = existing?.continued_from ?? null;
+  if (meta.continued_from !== undefined && meta.continued_from !== null) {
+    if (typeof meta.continued_from !== "string" || !UUID.test(meta.continued_from) || meta.continued_from === id) {
+      return Response.json({ error: "continued_from must be another session UUID" }, { status: 400 });
+    }
+    if (existing && continuedFrom !== null && meta.continued_from !== continuedFrom) {
+      return Response.json({ error: "continued_from cannot change" }, { status: 400 });
+    }
+    const parent = await env.DB.prepare("SELECT owner_email FROM sessions WHERE id = ?").bind(meta.continued_from).first<{ owner_email: string }>();
+    if (parent?.owner_email !== who.email) return Response.json({ error: "continued_from must be one of your sessions" }, { status: 400 });
+    continuedFrom = meta.continued_from;
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -75,12 +89,12 @@ export async function createSession(request: Request, env: Env, who: Identity): 
   await env.DB.prepare(
     `INSERT OR REPLACE INTO sessions
        (id, owner_email, owner_name, project, branch, title, cwd_base, model, cc_version,
-        msg_count, bytes, created_at, updated_at, last_synced_at, last_line_hash, forked_from, forked_from_owner)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        msg_count, bytes, created_at, updated_at, last_synced_at, last_line_hash, forked_from, forked_from_owner, continued_from)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id, who.email, who.name, project, str(meta.branch), str(meta.title), str(meta.cwd_base, 1000),
-      str(meta.model), str(meta.cc_version), msgCount, file.size, existing?.created_at ?? now, now, now, hash, forkedFrom, forkedFromOwner,
+      str(meta.model), str(meta.cc_version), msgCount, file.size, existing?.created_at ?? now, now, now, hash, forkedFrom, forkedFromOwner, continuedFrom,
     )
     .run();
 

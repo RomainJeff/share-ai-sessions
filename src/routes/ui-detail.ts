@@ -60,6 +60,8 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
   const session = await env.DB.prepare(`SELECT * FROM sessions WHERE id = ? AND ${VISIBLE}`)
     .bind(id, visibleSince()).first<Record<string, string | number | null>>();
   if (!session) return page("Session introuvable", "<h1>Session introuvable</h1>", 404);
+  const continuation = await env.DB.prepare(`SELECT id FROM sessions WHERE continued_from = ? AND ${VISIBLE} ORDER BY created_at DESC LIMIT 1`)
+    .bind(id, visibleSince()).first<{ id: string }>();
 
   // T02 stores plain JSONL; also read the gzip segments used by incremental sync.
   const keys: string[] = [];
@@ -130,6 +132,8 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
         <span class="badge mono">${icon("folder")}${e(session.project)}</span>
         ${session.branch ? `<span class="badge mono">${icon("branch")}${e(session.branch)}</span>` : ""}
         ${model ? `<span class="chip">${icon("chip")}${e(model)}</span>` : ""}
+        ${session.continued_from ? `<span class="badge">${icon("branch")}suite de <a href="/s/${e(encodeURIComponent(String(session.continued_from)))}">${e(session.continued_from)}</a></span>` : ""}
+        ${continuation ? `<span class="badge">${icon("branch")}suite dans <a href="/s/${e(encodeURIComponent(String(continuation.id)))}">${e(continuation.id)}</a></span>` : ""}
         ${session.forked_from ? `<span class="badge">${icon("branch")}forké depuis <a href="/s/${e(encodeURIComponent(String(session.forked_from)))}">${e(session.forked_from)}</a> · ${e(session.forked_from_owner)}</span>` : ""}
       </div>
       <p class="hint">${tokens} tokens · ${usages.size} réponses API (usage dédupliqué par message.id) · ${records.length} lignes de conversation</p>
