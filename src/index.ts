@@ -2,10 +2,17 @@ import { identify, type Identity } from "./auth";
 import { createSession } from "./routes/sessions-create";
 import { listSessions } from "./routes/sessions-list";
 
+import { patchSession } from "./routes/sessions-patch";
+import { getSession } from "./routes/sessions-get";
+import { sessionBundle } from "./routes/sessions-bundle";
+
 type Handler = (request: Request, env: Env, who: Identity, params: Record<string, string>) => Promise<Response>;
 
 // One line per route; each handler lives in its own file under routes/.
 const ROUTES: [method: string, pattern: URLPattern, handler: Handler][] = [
+  ["PATCH", new URLPattern({ pathname: "/api/sessions/:id" }), patchSession],
+  ["GET", new URLPattern({ pathname: "/api/sessions/:id" }), getSession],
+  ["GET", new URLPattern({ pathname: "/api/sessions/:id/bundle" }), sessionBundle],
   ["POST", new URLPattern({ pathname: "/api/sessions" }), createSession],
   ["GET", new URLPattern({ pathname: "/api/sessions" }), listSessions],
 ];

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { api, ClientError } from "../lib.ts";
+import { trackUpload } from "../manifest.ts";
 import { detectProject } from "../project.ts";
 
 type Line = Record<string, any>;
@@ -32,10 +33,10 @@ export function readMeta(jsonl: string, fileName: string) {
 }
 
 // T02: raw upload, no redaction yet (T04). Do not upload real sessions to prod before T04.
-export async function upload(path: string): Promise<unknown> {
+export async function upload(path: string, snapshot?: string): Promise<unknown> {
   let jsonl: string;
   try {
-    jsonl = await readFile(path, "utf8");
+    jsonl = snapshot ?? await readFile(path, "utf8");
   } catch {
     throw new ClientError("not_found", `Cannot read ${path}`);
   }
@@ -45,5 +46,8 @@ export async function upload(path: string): Promise<unknown> {
   const form = new FormData();
   form.set("meta", JSON.stringify(body));
   form.set("jsonl", new Blob([jsonl], { type: "application/x-ndjson" }), `${meta.id}.jsonl`);
-  return api("/api/sessions", { method: "POST", body: form });
+  const result = await api("/api/sessions", { method: "POST", body: form });
+  await trackUpload(meta.id, path, Buffer.from(jsonl));
+  // CLI stdout is captured in the calling Claude transcript (survives a lost manifest).
+  return { ...(result as object), marker: `share-session:opt-in ${meta.id}` };
 }
