@@ -6,7 +6,11 @@
     "dev": "wrangler dev",
     "test": "vitest run && npm run test:cli",
     "test:cli": "node --test cli/*.test.ts test/*.node.mjs",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p cli"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p cli",
+    "build:skill": "sh scripts/build-skill.sh",
+    "pretest": "npm run build:skill",
+    "predev": "npm run build:skill",
+    "deploy": "npm run build:skill && wrangler deploy"
   },
   "dependencies": {
     "jose": "^6.2.10",

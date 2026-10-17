@@ -17,7 +17,7 @@ It prints one JSON result on stdout. On failure it prints safe JSON on stderr an
 
 ## Install (any machine)
 
-Copy or symlink this whole folder to `~/.claude/skills/share-session/` (or a repo's `.claude/skills/`). Requirements: Node 24+, `cloudflared`, and an email allowed by the Access policy.
+Download `share-session.skill` from the reader's home page (https://sessions.example.com, behind Access) and add it in Claude, or unzip it into `~/.claude/skills/` (or a repo's `.claude/skills/`). Alternatively copy or symlink this whole folder there. Requirements: Node 24+, `cloudflared`, and an email allowed by the Access policy.
 
 ## First use: guided setup
 

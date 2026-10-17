@@ -10,6 +10,7 @@ declare namespace Cloudflare {
     OIDC_CLIENT_SECRET: string;
     DB: D1Database;
     SESSIONS: R2Bucket;
+    ASSETS: Fetcher;
   }
 }
 

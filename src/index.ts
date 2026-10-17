@@ -7,6 +7,7 @@ import { sessionDetailPage } from "./routes/ui-detail";
 import { patchSession } from "./routes/sessions-patch";
 import { getSession } from "./routes/sessions-get";
 import { sessionBundle } from "./routes/sessions-bundle";
+import { skillDownload } from "./routes/skill-download";
 
 import { BROKER_ISSUER, brokerInScope } from "./broker";
 import { handleMcpHost } from "./routes/mcp";
@@ -22,6 +23,7 @@ const ROUTES: [method: string, pattern: URLPattern, handler: Handler][] = [
   ["GET", new URLPattern({ pathname: "/api/sessions" }), listSessions],
   ["GET", new URLPattern({ pathname: "/" }), sessionListPage],
   ["GET", new URLPattern({ pathname: "/s/:id" }), sessionDetailPage],
+  ["GET", new URLPattern({ pathname: "/share-session.skill" }), skillDownload],
 ];
 
 export default {

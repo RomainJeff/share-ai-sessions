@@ -48,6 +48,7 @@ export async function sessionListPage(request: Request, env: Env): Promise<Respo
       </dialog>
     </form>
     <p class="retention">${icon("info")}Les sessions inactives depuis plus de 90 jours sont masquées. Elles réapparaissent si leur auteur les synchronise à nouveau.</p>
+    <p class="retention">${icon("info")}<span>Pour partager vos sessions : <a href="/share-session.skill" download>télécharger le skill <span class="mono">share-session.skill</span></a>, puis l’ajouter dans Claude (Paramètres → Capacités → Skills) ou le dézipper dans <span class="mono">~/.claude/skills/</span>.</span></p>
     <section class="cards" aria-label="Sessions">
       ${rows.map((s) => `<a class="card" href="/s/${e(encodeURIComponent(String(s.id)))}">
         <div class="top"><h2 class="ttl">${e(s.title || s.id)}</h2><span class="when">${dateLabel(Number(s.updated_at), true)}</span></div>

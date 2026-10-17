@@ -187,4 +187,16 @@ describe("web reader", () => {
     expect(html.indexOf("First segment")).toBeLessThan(html.indexOf("Second segment"));
     expect(html).toContain("1 ligne(s) JSONL invalide(s)");
   });
+
+  it("serves the packaged skill behind Access and links it from the list", async () => {
+    const response = await get("/share-session.skill");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/zip");
+    expect(response.headers.get("Content-Disposition")).toContain("share-session.skill");
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    expect(String.fromCharCode(bytes[0]!, bytes[1]!)).toBe("PK");
+    expect(new TextDecoder().decode(bytes)).toContain("share-session/SKILL.md");
+    expect((await SELF.fetch(ORIGIN + "/share-session.skill")).status).toBe(401);
+    expect(await (await get("/")).text()).toContain('href="/share-session.skill"');
+  });
 });

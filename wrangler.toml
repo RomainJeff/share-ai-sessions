@@ -28,3 +28,9 @@ OIDC_CLIENT_ID = "your-access-oidc-client-id"
 # set from the sessions.example.com Access app (T00).
 ACCESS_TEAM_DOMAIN = "example.cloudflareaccess.com"
 ACCESS_AUD = "your-access-application-aud"
+
+# dist/ is built by `npm run build:skill`. The Worker runs first so the Access check guards it.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+run_worker_first = true
