@@ -6,7 +6,7 @@ import { loadBaseUrl } from "./lib.ts";
 import type { RedactionOptions } from "./redact.ts";
 
 // offset/last_line_hash describe the local source; the server holds sanitized bytes, compared by sync.
-export type Entry = { id: string; path: string; offset: number; last_line_hash: string; url: string; strip?: RedactionOptions };
+export type Entry = { id: string; path: string; offset: number; last_line_hash: string; url: string; strip?: RedactionOptions; project?: string };
 type Manifest = {
   sessions: Record<string, Entry>;
   forks?: Record<string, { forked_from: string }>;
@@ -36,11 +36,12 @@ export function lastLineHash(bytes: Uint8Array): string {
   while (start >= 0 && bytes[start] !== 10) start--;
   return createHash("sha256").update(bytes.slice(start + 1)).digest("hex");
 }
-export async function trackUpload(id: string, path: string, bytes: Uint8Array, { stripThinking, stripToolResults }: RedactionOptions = {}): Promise<void> {
+export async function trackUpload(id: string, path: string, bytes: Uint8Array, { stripThinking, stripToolResults }: RedactionOptions = {}, project?: string): Promise<void> {
   // Keep only the policy: callers may pass upload options (e.g. the confirm hash).
   const strip = { stripThinking, stripToolResults };
   const manifest = await readManifest();
   delete manifest.stopped?.[id];
-  manifest.sessions[id] = { id, path: resolve(path), offset: bytes.length, last_line_hash: lastLineHash(bytes), url: `${await loadBaseUrl()}/s/${id}`, strip };
+  project ??= manifest.sessions[id]?.project;
+  manifest.sessions[id] = { id, path: resolve(path), offset: bytes.length, last_line_hash: lastLineHash(bytes), url: `${await loadBaseUrl()}/s/${id}`, strip, ...(project ? { project } : {}) };
   await writeManifest(manifest);
 }

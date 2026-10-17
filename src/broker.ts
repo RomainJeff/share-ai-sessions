@@ -4,7 +4,7 @@ export const BROKER_ISSUER = "https://sessions-mcp.example.com";
 export const BROKER_AUD = "session-share-cli";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const validScope = (scope: unknown): scope is string =>
-  typeof scope === "string" && (scope === "read" || (scope.startsWith("write:") && UUID.test(scope.slice(6))));
+  typeof scope === "string" && (scope === "read" || scope === "projects" || (scope.startsWith("write:") && UUID.test(scope.slice(6))));
 
 // Fail closed: never sign with the guessable string "undefined", or a short key.
 function signingKey(env: Env): Uint8Array {
@@ -16,8 +16,8 @@ function signingKey(env: Env): Uint8Array {
 export async function mintSessionToken(env: Env, email: string, scope: string, sessionId?: string) {
   const key = signingKey(env);
   if (!email.includes("@")) throw new Error("invalid email");
-  if (scope !== "read" && scope !== "write") throw new Error("invalid scope");
-  if (scope === "read" && sessionId !== undefined) throw new Error("session_id only applies to write scope");
+  if (scope !== "read" && scope !== "write" && scope !== "projects") throw new Error("invalid scope");
+  if (scope !== "write" && sessionId !== undefined) throw new Error("session_id only applies to write scope");
   if (scope === "write") {
     if (!sessionId || !UUID.test(sessionId)) throw new Error("write requires session_id (lowercase UUID)");
     // Retention never releases ownership of an existing id.
@@ -26,12 +26,12 @@ export async function mintSessionToken(env: Env, email: string, scope: string, s
     if (existing && existing.owner_email !== email) throw new Error("forbidden: session belongs to another email");
   }
   const expiresAt = Math.floor(Date.now() / 1000) + 600;
-  const token = await new SignJWT({ scope: scope === "read" ? "read" : `write:${sessionId}` })
+  const token = await new SignJWT({ scope: scope === "write" ? `write:${sessionId}` : scope })
     .setProtectedHeader({ alg: "HS256" }).setSubject(email).setIssuer(BROKER_ISSUER)
     .setAudience(BROKER_AUD).setIssuedAt().setExpirationTime(expiresAt).sign(key);
   return {
     token, expires_at: new Date(expiresAt * 1000).toISOString(), base_url: BROKER_ISSUER,
-    command: `SESSION_TOKEN=${token} node <share-session skill dir>/scripts/client.ts ${scope === "read" ? "list" : "upload <path.jsonl>"}`,
+    command: `SESSION_TOKEN=${token} node <share-session skill dir>/scripts/client.ts ${{ read: "list", write: "upload <path.jsonl>", projects: "project create <slug>" }[scope]}`,
   };
 }
 
@@ -51,7 +51,12 @@ export async function verifyBroker(token: string, env: Env): Promise<{ email: st
 /** Applied before route dispatch so later routes inherit the same broker restrictions. */
 export async function brokerInScope(request: Request, scope: string): Promise<boolean> {
   const path = new URL(request.url).pathname;
-  if (scope === "read") return request.method === "GET" && /^\/api\/sessions(?:\/[^/]+(?:\/bundle)?)?$/.test(path);
+  if (scope === "read") return request.method === "GET" && /^\/api\/(?:sessions(?:\/[^/]+(?:\/bundle)?)?|projects(?:\/[^/]+)?)$/.test(path);
+  // Membership changes only; the routes still check the caller's role.
+  if (scope === "projects") {
+    return (request.method === "POST" && path === "/api/projects") ||
+      ((request.method === "PUT" || request.method === "DELETE") && /^\/api\/projects\/[^/]+\/members\/[^/]+$/.test(path));
+  }
   const id = scope.slice(6);
   if (request.method === "PATCH") return path === `/api/sessions/${id}`;
   if (request.method !== "POST" || path !== "/api/sessions") return false;

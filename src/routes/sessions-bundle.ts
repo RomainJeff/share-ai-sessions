@@ -1,10 +1,10 @@
 import type { Identity } from "../auth";
-import { segmentKey, VISIBLE, visibleSince } from "../db";
+import { MEMBER, segmentKey, VISIBLE, visibleSince } from "../db";
 
 /** Stream decompressed segments in order; the T02 initial segment stays readable. */
-export async function sessionBundle(request: Request, env: Env, _who: Identity, { id }: Record<string, string>): Promise<Response> {
-  const session = await env.DB.prepare(`SELECT * FROM sessions WHERE id = ? AND ${VISIBLE}`)
-    .bind(id, visibleSince()).first<{ segment_count: number } & Record<string, unknown>>();
+export async function sessionBundle(request: Request, env: Env, who: Identity, { id }: Record<string, string>): Promise<Response> {
+  const session = await env.DB.prepare(`SELECT * FROM sessions WHERE id = ? AND ${VISIBLE} AND ${MEMBER}`)
+    .bind(id, visibleSince(), who.email).first<{ segment_count: number } & Record<string, unknown>>();
   if (!session) return Response.json({ error: "not found" }, { status: 404 });
   let n = 1;
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;

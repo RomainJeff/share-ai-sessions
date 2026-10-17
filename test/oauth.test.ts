@@ -12,7 +12,7 @@ const call = (host: string, path: string, init: RequestInit = {}, token?: string
   });
 function form(id: string) {
   const body = new FormData();
-  body.set("meta", JSON.stringify({ id, project: "a/b" }));
+  body.set("meta", JSON.stringify({ id, project: "team" }));
   body.set("jsonl", new File(['{"type":"user"}\n'], "s.jsonl"));
   return body;
 }

@@ -114,8 +114,8 @@ test("three Stop turns silently sync sanitized bytes for a manifest opt-in", asy
   const f = await syncFixture();
   try {
     await writeFile(f.path, f.line("start"));
-    const { confirmation } = await upload(f.path) as { confirmation: string };
-    await upload(f.path, { confirm: confirmation });
+    const { confirmation } = await upload(f.path, { project: "team" }) as { confirmation: string };
+    await upload(f.path, { project: "team", confirm: confirmation });
     let expected = f.line("start");
     const secret = "ghp_" + "G".repeat(36);
     for (const value of ["départ 🦓", `token ${secret}`, "third turn"]) {
@@ -153,8 +153,8 @@ test("upload, stop, then Stop hook does not fetch", async () => {
   const f = await syncFixture();
   try {
     await writeFile(f.path, f.line("start"));
-    const { confirmation } = await upload(f.path) as { confirmation: string };
-    const { marker } = await upload(f.path, { confirm: confirmation }) as { marker: string };
+    const { confirmation } = await upload(f.path, { project: "team" }) as { confirmation: string };
+    const { marker } = await upload(f.path, { project: "team", confirm: confirmation }) as { marker: string };
     const result = await stop([f.id]) as { marker: string };
     assert.equal(result.marker, `share-session:opt-out ${f.id}`);
     await appendFile(f.path, f.line(marker) + f.line(result.marker) + f.line("after stop"));
@@ -168,12 +168,12 @@ test("upload, stop, new consented upload: Stop hook syncs again", async () => {
   const f = await syncFixture();
   try {
     await writeFile(f.path, f.line("start"));
-    let { confirmation } = await upload(f.path) as { confirmation: string };
-    await upload(f.path, { confirm: confirmation });
+    let { confirmation } = await upload(f.path, { project: "team" }) as { confirmation: string };
+    await upload(f.path, { project: "team", confirm: confirmation });
     const { marker } = await stop([f.id]) as { marker: string };
     await appendFile(f.path, f.line(marker));
-    ({ confirmation } = await upload(f.path) as { confirmation: string });
-    await upload(f.path, { confirm: confirmation });
+    ({ confirmation } = await upload(f.path, { project: "team" }) as { confirmation: string });
+    await upload(f.path, { project: "team", confirm: confirmation });
     assert.equal(JSON.parse(await readFile(f.manifest, "utf8")).stopped[f.id], undefined);
     await appendFile(f.path, f.line("resumed"));
     assert.deepEqual(await f.invoke(), { stdout: "", stderr: "" });

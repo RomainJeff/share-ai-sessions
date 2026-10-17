@@ -81,11 +81,19 @@ export async function api(path: string, init: RequestInit = {}): Promise<unknown
     redirect: "manual", // an Access login redirect means the token was refused
     headers: { ...init.headers, ...(!brokerToken ? { "cf-access-token": token } : {}), Authorization: `Bearer ${token}` },
   });
-  if (response.status === 401 || response.status === 403 || (response.status >= 300 && response.status < 400)) {
-    throw new ClientError(response.status === 403 ? "forbidden" : "unauthorized", `Access refused (${response.status})`);
+  if (response.status === 401 || (response.status >= 300 && response.status < 400)) {
+    throw new ClientError("unauthorized", `Access refused (${response.status})`);
   }
-  if (response.status === 409) throw new ClientError("offset_mismatch", "Server offset changed; full upload required");
-  if (response.status === 404) throw new ClientError("not_found", "Session not found");
-  if (!response.ok) throw new ClientError("http_error", `Server answered ${response.status}`);
-  return response.json();
+  if (response.ok) return response.json();
+  // The Worker answers `{ error }`; the Access edge answers HTML. The text is the server's, never a secret.
+  const reason = await response.json().then((b: { error?: unknown }) => typeof b?.error === "string" ? b.error : null, () => null);
+  const projects = path.startsWith("/api/projects");
+  if (response.status === 403) throw new ClientError("forbidden", reason ?? `Access refused (${response.status})`);
+  if (response.status === 409) {
+    if (projects) throw new ClientError("conflict", reason ?? "Conflict");
+    throw new ClientError("offset_mismatch", "Server offset changed; full upload required");
+  }
+  if (response.status === 404) throw new ClientError("not_found", reason ?? (projects ? "Project not found" : "Session not found"));
+  if (response.status === 400) throw new ClientError("bad_request", reason ?? "Bad request");
+  throw new ClientError("http_error", `Server answered ${response.status}`);
 }

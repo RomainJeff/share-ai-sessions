@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { api, ClientError } from "../lib.ts";
 import { readManifest, trackUpload } from "../manifest.ts";
-import { detectProject } from "../project.ts";
+import { detectRepo } from "../repo.ts";
 import { stopHookInstalled } from "./doctor.ts";
 import { redactJsonl, type RedactionOptions } from "../redact.ts";
 
@@ -36,7 +36,7 @@ export function readMeta(jsonl: string, fileName: string) {
   };
 }
 
-export type UploadOptions = RedactionOptions & { confirm?: string };
+export type UploadOptions = RedactionOptions & { confirm?: string; project?: string };
 
 /** Opt-in marker echoed on stdout; Claude's transcript keeps it, so sync can recover id and strip policy after a lost manifest. */
 export const optInMarker = (id: string, options: RedactionOptions = {}) =>
@@ -47,21 +47,32 @@ export function sanitize(jsonl: string, options: RedactionOptions = {}) {
   return redactJsonl(jsonl, options);
 }
 
-async function prepare(path: string, jsonl: string, options: RedactionOptions) {
+/**
+ * The user picks the project of a new session. Once shared, a session, its forks and its compaction
+ * continuations stay in that project: the server keeps it when `project` is omitted and refuses a change.
+ */
+async function prepare(path: string, jsonl: string, options: UploadOptions) {
   const { cwd, ...meta } = readMeta(jsonl, path);
-  const { forks, continuations } = await readManifest();
-  const body = { ...meta, cwd_base: cwd, project: detectProject(cwd ?? process.cwd()), ...forks?.[meta.id], ...continuations?.[meta.id] };
-  return { id: meta.id, redacted: sanitize(jsonl, options), metadata: redactJsonl(JSON.stringify(body)) };
+  const { sessions, forks, continuations } = await readManifest();
+  const inherited = !!(sessions[meta.id] || forks?.[meta.id] || continuations?.[meta.id]);
+  const body = {
+    ...meta, cwd_base: cwd, repo: detectRepo(cwd ?? process.cwd()),
+    ...(options.project ? { project: options.project.toLowerCase() } : {}),
+    ...forks?.[meta.id], ...continuations?.[meta.id],
+  };
+  const project = options.project?.toLowerCase() ?? sessions[meta.id]?.project ??
+    (forks?.[meta.id] ? "same as the forked session" : continuations?.[meta.id] ? "same as the compacted session" : "unchanged");
+  return { id: meta.id, project, inherited, redacted: sanitize(jsonl, options), metadata: redactJsonl(JSON.stringify(body)) };
 }
 
 /** POST a full sanitized replacement and record the local source snapshot. Callers own consent. */
-export async function send(path: string, jsonl: string, options: RedactionOptions = {}): Promise<unknown> {
+export async function send(path: string, jsonl: string, options: UploadOptions = {}): Promise<unknown> {
   const { id, redacted, metadata } = await prepare(path, jsonl, options);
   const form = new FormData();
   form.set("meta", metadata.jsonl);
   form.set("jsonl", new Blob([redacted.jsonl], { type: "application/x-ndjson" }), "session.jsonl");
-  const result = await api("/api/sessions", { method: "POST", body: form });
-  await trackUpload(id, path, Buffer.from(jsonl), options);
+  const result = await api("/api/sessions", { method: "POST", body: form }) as { project?: string };
+  await trackUpload(id, path, Buffer.from(jsonl), options, result.project);
   return { ...(result as object), marker: optInMarker(id, options), stop_hook: stopHookInstalled() };
 }
 
@@ -78,10 +89,15 @@ export async function upload(path: string, options: UploadOptions = {}): Promise
     throw new ClientError('confirmation_mismatch', 'Transcript or options changed, or confirmation is invalid; request a fresh preview and confirm its hash');
   }
   const jsonl = source.subarray(0, previewed).toString("utf8");
-  const { redacted, metadata } = await prepare(path, jsonl, options);
+  const { project, inherited, redacted, metadata } = await prepare(path, jsonl, options);
+  // Sync (send) relies on the server keeping the project; only a first upload has to pick one.
+  if (!options.project && !inherited) {
+    throw new ClientError("project_required", "Pick a project: --project <slug> (client.ts project list, or project create <slug>)");
+  }
   const replacements = { ...redacted.replacements };
   for (const [kind, count] of Object.entries(metadata.replacements)) replacements[kind] = (replacements[kind] ?? 0) + count;
   const preview = {
+    project,
     lines: redacted.lines,
     replacements,
     bytes: Buffer.byteLength(redacted.jsonl),
@@ -110,9 +126,10 @@ export async function uploadCommand(args: string[]): Promise<unknown> {
       'strip-thinking': { type: 'boolean' },
       'strip-tool-results': { type: 'boolean' },
       confirm: { type: 'string' },
+      project: { type: 'string' },
     } });
   } catch {
-    throw new ClientError('usage', 'Usage: client.ts upload <path.jsonl> [--strip-thinking] [--strip-tool-results] [--confirm <preview hash>]');
+    throw new ClientError('usage', 'Usage: client.ts upload <path.jsonl> [--project <slug>] [--strip-thinking] [--strip-tool-results] [--confirm <preview hash>]');
   }
   const [path] = parsed.positionals;
   if (!path || parsed.positionals.length !== 1) throw new ClientError('usage', 'Provide one transcript path');
@@ -120,5 +137,6 @@ export async function uploadCommand(args: string[]): Promise<unknown> {
     stripThinking: parsed.values['strip-thinking'] === true,
     stripToolResults: parsed.values['strip-tool-results'] === true,
     confirm: typeof parsed.values.confirm === 'string' ? parsed.values.confirm : undefined,
+    project: typeof parsed.values.project === 'string' ? parsed.values.project : undefined,
   });
 }

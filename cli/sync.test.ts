@@ -62,10 +62,10 @@ test("manual sync uses server bytes after cache loss, handles 409/rewrite, and s
   try {
     let text = line("départ 🦓");
     await writeFile(path, text);
-    const { confirmation } = await upload(path) as { confirmation: string };
+    const { confirmation } = await upload(path, { project: "team" }) as { confirmation: string };
     // The live session appends between preview and confirm: only the previewed bytes are sent.
     await writeFile(path, text + line("written after preview"));
-    const result = await upload(path, { confirm: confirmation }) as { marker: string };
+    const result = await upload(path, { project: "team", confirm: confirmation }) as { marker: string };
     assert.equal(requests.at(-1)!.body, text);
     assert.equal(result.marker, `share-session:opt-in ${id}`);
     assert.equal((JSON.parse(await readFile(manifest, "utf8"))).sessions[id].offset, Buffer.byteLength(text));
@@ -139,10 +139,10 @@ test("sync recovers both strip flags from the last opt-in marker after manifest 
       + blocks("assistant", [{ type: "thinking", thinking: "original private reasoning" }, { type: "text", text: "départ 🦓" }])
       + blocks("user", [{ type: "tool_result", tool_use_id: "original-tool", content: "original private result" }]);
     await writeFile(path, text);
-    const { confirmation } = await upload(path, strip) as { confirmation: string };
+    const { confirmation } = await upload(path, { ...strip, project: "team" }) as { confirmation: string };
     assert.equal(typeof confirmation, "string");
     assert.equal(requests.length, 0, "preview must not upload");
-    const { marker } = await upload(path, { ...strip, confirm: confirmation }) as { marker: string };
+    const { marker } = await upload(path, { ...strip, project: "team", confirm: confirmation }) as { marker: string };
     assert.equal(marker, `share-session:opt-in ${id} --strip-thinking --strip-tool-results`);
     assert.deepEqual(JSON.parse(await readFile(manifest, "utf8")).sessions[id].strip, strip, "manifest stores only the policy, never the confirm hash");
     const uploaded = requests[0]!;

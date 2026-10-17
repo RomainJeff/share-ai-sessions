@@ -1,13 +1,16 @@
 import type { Identity } from "../auth";
-import { segmentKey } from "../db";
+import { atLeast, roleIn, segmentKey } from "../db";
 import { lastLineHash } from "../transcript";
 
 export async function patchSession(request: Request, env: Env, who: Identity, { id }: Record<string, string>): Promise<Response> {
   // Writes can revive an expired session; ownership still applies.
-  const session = await env.DB.prepare("SELECT owner_email, bytes, segment_count FROM sessions WHERE id = ?")
-    .bind(id).first<{ owner_email: string; bytes: number; segment_count: number }>();
+  const session = await env.DB.prepare("SELECT owner_email, project, bytes, segment_count FROM sessions WHERE id = ?")
+    .bind(id).first<{ owner_email: string; project: string; bytes: number; segment_count: number }>();
   if (!session) return Response.json({ error: "not found" }, { status: 404 });
   if (session.owner_email !== who.email) return Response.json({ error: "forbidden" }, { status: 403 });
+  if (!atLeast(await roleIn(env, session.project, who.email), "writer")) {
+    return Response.json({ error: `writer role required on project ${session.project}` }, { status: 403 });
+  }
   const raw = request.headers.get("X-Base-Offset");
   const offset = Number(raw);
   if (raw === null || !/^\d+$/.test(raw) || !Number.isSafeInteger(offset)) {

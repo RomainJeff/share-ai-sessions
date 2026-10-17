@@ -8,6 +8,7 @@ import { patchSession } from "./routes/sessions-patch";
 import { getSession } from "./routes/sessions-get";
 import { sessionBundle } from "./routes/sessions-bundle";
 import { skillDownload } from "./routes/skill-download";
+import { createProject, deleteMember, getProject, listProjects, putMember } from "./routes/projects";
 
 import { BROKER_ISSUER, brokerInScope } from "./broker";
 import { handleMcpHost } from "./routes/mcp";
@@ -21,6 +22,11 @@ const ROUTES: [method: string, pattern: URLPattern, handler: Handler][] = [
   ["GET", new URLPattern({ pathname: "/api/sessions/:id/bundle" }), sessionBundle],
   ["POST", new URLPattern({ pathname: "/api/sessions" }), createSession],
   ["GET", new URLPattern({ pathname: "/api/sessions" }), listSessions],
+  ["PUT", new URLPattern({ pathname: "/api/projects/:slug/members/:email" }), putMember],
+  ["DELETE", new URLPattern({ pathname: "/api/projects/:slug/members/:email" }), deleteMember],
+  ["GET", new URLPattern({ pathname: "/api/projects/:slug" }), getProject],
+  ["POST", new URLPattern({ pathname: "/api/projects" }), createProject],
+  ["GET", new URLPattern({ pathname: "/api/projects" }), listProjects],
   ["GET", new URLPattern({ pathname: "/" }), sessionListPage],
   ["GET", new URLPattern({ pathname: "/s/:id" }), sessionDetailPage],
   ["GET", new URLPattern({ pathname: "/share-session.skill" }), skillDownload],

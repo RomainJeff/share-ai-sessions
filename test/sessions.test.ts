@@ -22,20 +22,20 @@ describe("upload → list", () => {
   it("stores the JSONL and lists it under the token's email, never the body's", async () => {
     const id = crypto.randomUUID();
     const res = await upload(await mintJwt({ email: ALICE, name: "Alice" }), {
-      id, project: "Acme/Notes", title: "hello", owner_email: "mallory@evil.test",
+      id, project: "team", repo: "Acme/Notes", title: "hello", owner_email: "mallory@evil.test",
     });
     expect(res.status).toBe(201);
 
     const row = (await list(await mintJwt({ email: BOB }))).find((s) => s.id === id);
-    expect(row).toMatchObject({ owner_email: ALICE, owner_name: "Alice", project: "acme/notes", title: "hello" });
+    expect(row).toMatchObject({ owner_email: ALICE, owner_name: "Alice", project: "team", repo: "acme/notes", title: "hello" });
     expect(await (await env.SESSIONS.get(`sessions/${id}/seg-0001.jsonl`))!.text()).toBe(JSONL);
   });
 
-  it("filters by project, author, mine and q", async () => {
+  it("filters by repo, author, mine and q", async () => {
     const id = crypto.randomUUID();
-    await upload(await mintJwt({ email: BOB }), { id, project: "bob/repo", title: "needle here" });
+    await upload(await mintJwt({ email: BOB }), { id, project: "team", repo: "bob/repo", title: "needle here" });
     const bob = await mintJwt({ email: BOB });
-    expect((await list(bob, "?project=bob/repo")).map((s) => s.id)).toContain(id);
+    expect((await list(bob, "?repo=bob/repo")).map((s) => s.id)).toContain(id);
     expect((await list(bob, `?author=${ALICE}`)).map((s) => s.id)).not.toContain(id);
     expect((await list(bob, "?mine=1")).every((s) => s.owner_email === BOB)).toBe(true);
     expect((await list(bob, "?q=needle")).map((s) => s.id)).toEqual([id]);
@@ -43,13 +43,13 @@ describe("upload → list", () => {
 
   it("re-upload is idempotent for the owner, 403 for anyone else", async () => {
     const id = crypto.randomUUID();
-    expect((await upload(await mintJwt(), { id, project: "a/b" })).status).toBe(201);
-    expect((await upload(await mintJwt(), { id, project: "a/b" })).status).toBe(200);
-    expect((await upload(await mintJwt({ email: BOB }), { id, project: "a/b" })).status).toBe(403);
+    expect((await upload(await mintJwt(), { id, project: "team" })).status).toBe(201);
+    expect((await upload(await mintJwt(), { id, project: "team" })).status).toBe(200);
+    expect((await upload(await mintJwt({ email: BOB }), { id, project: "team" })).status).toBe(403);
   });
 
   it("rejects a missing id", async () => {
-    expect((await upload(await mintJwt(), { project: "a/b" })).status).toBe(400);
+    expect((await upload(await mintJwt(), { project: "team" })).status).toBe(400);
   });
 });
 
@@ -71,7 +71,7 @@ describe("auth", () => {
 describe("retention", () => {
   it("hides sessions not synced for more than 90 days", async () => {
     const id = crypto.randomUUID();
-    await upload(await mintJwt(), { id, project: "old/one" });
+    await upload(await mintJwt(), { id, project: "team" });
     const old = Date.now() - 91 * 24 * 60 * 60 * 1000;
     await env.DB.prepare("UPDATE sessions SET last_synced_at = ? WHERE id = ?").bind(old, id).run();
     expect((await list(await mintJwt())).map((s) => s.id)).not.toContain(id);

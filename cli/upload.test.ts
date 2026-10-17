@@ -42,23 +42,23 @@ test('CLI previews without auth/network, binds confirmation to content/options, 
   const source = jsonl + JSON.stringify({ type: 'ai-title', aiTitle: secrets[4][1] }) + '\n';
   await writeFile(path, source);
   process.env.PATH = dir; // preview must work even when cloudflared cannot be found
-  const preview = await main(['upload', path]) as any;
+  const preview = await main(['upload', path, '--project', 'team']) as any;
   assert.equal(preview.status, 'confirmation_required');
   assert.equal(preview.preview.lines, 18);
   assert.ok(preview.preview.replacements.openai > 0);
   assert.match(preview.confirmation, /^[a-f0-9]{64}\.\d+$/);
   assert.equal(calls, 0);
-  await assert.rejects(main(['upload', path, '--confirm', 'yes']), { code: 'confirmation_mismatch' });
-  await assert.rejects(main(['upload', path, '--strip-thinking', '--confirm', preview.confirmation]), { code: 'confirmation_mismatch' });
+  await assert.rejects(main(['upload', path, '--project', 'team', '--confirm', 'yes']), { code: 'confirmation_mismatch' });
+  await assert.rejects(main(['upload', path, '--project', 'team', '--strip-thinking', '--confirm', preview.confirmation]), { code: 'confirmation_mismatch' });
   await writeFile(path, source.replace(sessionId, sessionId.replace(/.$/, (c) => c === 'a' ? 'b' : 'a'))); // same-length rewrite of previewed bytes voids consent; appends do not
-  await assert.rejects(main(['upload', path, '--confirm', preview.confirmation]), { code: 'confirmation_mismatch' });
+  await assert.rejects(main(['upload', path, '--project', 'team', '--confirm', preview.confirmation]), { code: 'confirmation_mismatch' });
   assert.equal(calls, 0);
   await writeFile(path, source);
   await writeFile(join(dir, 'cloudflared'), '#!/bin/sh\nprintf "fake.access.token"\n', { mode: 0o700 });
-  assert.deepEqual(await main(['upload', path, '--confirm', preview.confirmation]), { id: 'uploaded', marker: `share-session:opt-in ${sessionId}`, stop_hook: false });
+  assert.deepEqual(await main(['upload', path, '--project', 'team', '--confirm', preview.confirmation]), { id: 'uploaded', marker: `share-session:opt-in ${sessionId}`, stop_hook: false });
   await fs.mkdir(join(dir, '.claude'), { recursive: true });
   await writeFile(join(dir, '.claude', 'settings.json'), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'node client.ts hook-stop' }] }] } }));
-  assert.equal((await main(['upload', path, '--confirm', preview.confirmation]) as any).stop_hook, true, 'Stop hook in ~/.claude/settings.json is detected');
+  assert.equal((await main(['upload', path, '--project', 'team', '--confirm', preview.confirmation]) as any).stop_hook, true, 'Stop hook in ~/.claude/settings.json is detected');
   assert.equal(calls, 2);
   assert.equal(await readFile(path, 'utf8'), source, 'original remains untouched');
   fetch.mock.restore();
@@ -76,10 +76,10 @@ test('CLI strip flags produce a distinct preview and malformed input never reach
   const path = join(dir, 'fixture.jsonl');
   t.mock.method(globalThis, 'fetch', () => { throw new Error('unexpected network'); });
   await writeFile(path, jsonl);
-  const preview = await main(['upload', path, '--strip-thinking', '--strip-tool-results']) as any;
+  const preview = await main(['upload', path, '--project', 'team', '--strip-thinking', '--strip-tool-results']) as any;
   assert.equal(preview.preview.thinking_removed, 2);
   assert.equal(preview.preview.tool_results_stripped, 1);
   await writeFile(path, '{"password":"partial');
-  await assert.rejects(main(['upload', path]), { code: 'invalid_jsonl' });
-  await assert.rejects(main(['upload', path, '--yes']), { code: 'usage' });
+  await assert.rejects(main(['upload', path, '--project', 'team']), { code: 'invalid_jsonl' });
+  await assert.rejects(main(['upload', path, '--project', 'team', '--yes']), { code: 'usage' });
 });

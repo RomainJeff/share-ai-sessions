@@ -16,7 +16,7 @@ const call = (path: string, token?: string, init: RequestInit = {}, host = ISS) 
   SELF.fetch(`${host}${path}`, { ...init, headers: { ...init.headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
 function form(sessionId: string) {
   const body = new FormData();
-  body.set("meta", JSON.stringify({ id: sessionId, project: "a/b", owner_email: BOB }));
+  body.set("meta", JSON.stringify({ id: sessionId, project: "team", owner_email: BOB }));
   body.set("jsonl", new File(['{"type":"user"}\n'], "s.jsonl"));
   return body;
 }

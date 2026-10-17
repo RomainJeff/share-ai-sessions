@@ -6,7 +6,7 @@ const BASE = "https://sessions.example.com/api/sessions";
 const auth = async (email?: string) => ({ Authorization: `Bearer ${await mintJwt({ email: email ?? ALICE })}` });
 async function create(id: string, text: string) {
   const form = new FormData();
-  form.set("meta", JSON.stringify({ id, project: "a/b" }));
+  form.set("meta", JSON.stringify({ id, project: "team" }));
   form.set("jsonl", new File([text], "s.jsonl"));
   return SELF.fetch(BASE, { method: "POST", body: form, headers: await auth() });
 }

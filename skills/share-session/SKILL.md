@@ -1,6 +1,6 @@
 ---
 name: share-session
-description: Share a Claude Code session (JSONL) on Claude Session Share, list shared sessions by project, author or title, sync new lines, or stop syncing a session.
+description: Share a Claude Code session (JSONL) on Claude Session Share into a project you pick, list shared sessions by project, repo, author or title, sync new lines, stop syncing a session, or create projects and manage who can read or write them.
 ---
 
 # Share Session
@@ -43,10 +43,27 @@ Never run the login, type credentials, or read `~/.cloudflared/`. Setup ends at 
 ## MCP broker (without cloudflared)
 
 - Connector: `https://sessions-mcp.example.com/mcp`, OAuth through the allowlisted Access OIDC app.
-- Call `get_token({scope: "read"})` for list/read, or `get_token({scope: "write", session_id: "<lowercase UUID>"})` for upload/sync of one session. Another person's session cannot receive a write token.
+- Call `get_token({scope: "read"})` for list/read (sessions and projects), `get_token({scope: "write", session_id: "<lowercase UUID>"})` for upload/sync of one session, or `get_token({scope: "projects"})` for `project create`, `add` and `remove`. Another person's session cannot receive a write token. Roles still apply: a token never grants more than the user's role in the project.
 - The response contains `token`, `expires_at`, `base_url`, and `command`. Execute the returned command, replacing `<share-session skill dir>` with this skill's base directory and `<path.jsonl>` for upload. `SESSION_TOKEN` makes the client use the MCP host API without local config or cloudflared.
 - Tokens expire after 10 minutes. Keep them only in the command's environment prefix; never save them to files or config, or include them in user-facing output. `token_expired` means call `get_token` again; `invalid_token` means obtain a fresh token from this connector.
 - Read scope cannot write; write scope can only upload/PATCH its session and cannot read or delete. Obtain a read token separately for read operations. Automatic cloud hooks and setup are T11.
+
+## Projects and rights
+
+Every session lives in exactly one **project**, chosen by the user, independent of the folder or repo it was worked in. The git `owner/repo` of the session cwd is still recorded as `repo` metadata.
+
+| Role | Can |
+|------|-----|
+| `reader` | List, read in the browser, `pull` the project's sessions |
+| `writer` | Reader + upload new sessions into the project and sync their own |
+| `owner` | Writer + add, change or remove members |
+
+- A session outside your projects does not exist for you: list, reader page, bundle and pull all answer "not found".
+- **Choosing the project at upload.** Before the first `upload` of a session, run `project list` and ask the user which project it goes into, showing the projects where they are `writer` or `owner`. Suggest the one most related to the session's subject or repo, but let the user decide. If none fits, offer to create one (`project create <slug> --name "<name>"`) and do it only on a yes. Never pick silently.
+- **Locked.** Once uploaded, a session stays in its project. Its re-uploads and syncs, its forks (`pull` then upload) and its compaction continuations go into the same project automatically: omit `--project`. The server refuses a different project (`bad_request: project is locked to …`).
+- **Adding people.** `project add <slug> <email> --role reader|writer|owner` (default `reader`) also changes the role of an existing member. The person must also be allowed by the Cloudflare Access policy of `sessions.example.com`: remind the user, the client cannot do it. Run `add` and `remove` only when the user asked for that change, for that email.
+- A project always keeps at least one owner. A member can leave a project with `project remove <slug> <own email>`.
+- Sessions shared before projects existed are in the `legacy` project, whose owners are everyone who had uploaded at that time.
 
 ## Guardrails
 
@@ -54,17 +71,22 @@ Never run the login, type credentials, or read `~/.cloudflared/`. Setup ends at 
 - Never write, print or quote an Access token. The client never stores one; `cloudflared` keeps its own cache in `~/.cloudflared/`.
 - The session owner is the email in the verified token, never something you pass.
 - `upload` scans every JSONL string (including attachments, rendered text and metadata) for secrets. Affected thinking blocks are removed; transcript lines and message links are retained. Regex scanning has limits: review the preview before sharing sensitive sessions.
-- Run `upload <path.jsonl>` first: it returns a local preview (lines, replacements by type, sanitized JSONL bytes) and a `confirmation` hash, without authenticating or sending anything. Show the preview and obtain explicit user agreement, then repeat with `--confirm <hash>`. Confirm sends exactly the previewed bytes, so the live current session can be shared: lines appended since the preview go out with the next `sync`. Any rewrite of previewed content or option change requires a fresh preview and agreement. Never treat the hash itself as user consent.
+- Run `upload <path.jsonl> --project <slug>` first: it returns a local preview (target project, lines, replacements by type, sanitized JSONL bytes) and a `confirmation` hash, without authenticating or sending anything. Show the preview, including the project, and obtain explicit user agreement, then repeat with the same flags and `--confirm <hash>`. Confirm sends exactly the previewed bytes, so the live current session can be shared: lines appended since the preview go out with the next `sync`. Any rewrite of previewed content or option change requires a fresh preview and agreement. Never treat the hash itself as user consent.
 
 ## Commands
 
 | Command | Does |
 |---------|------|
 | `doctor` | Checks Node 24+, config, `cloudflared` token, API reachability, `claude --version`, `~/.claude/projects` |
-| `upload <path.jsonl> [--strip-thinking] [--strip-tool-results] [--confirm <hash>]` | Previews, then uploads after consent. Strip flags remove thinking or inline tool-result payloads for a read-only share; keep the same flags when confirming. Project = `owner/repo` from the session cwd's `git remote get-url origin` (cwd basename otherwise) |
+| `upload <path.jsonl> [--project <slug>] [--strip-thinking] [--strip-tool-results] [--confirm <hash>]` | Previews, then uploads after consent. `--project` is required for a session's first upload (`project_required` otherwise) and omitted for re-uploads, forks and continuations, which inherit it. Strip flags remove thinking or inline tool-result payloads for a read-only share; keep the same flags when confirming. `repo` = `owner/repo` from the session cwd's `git remote get-url origin` (cwd basename otherwise) |
 | `sync <id>` / `sync --all` | Send complete new lines, redacted with the upload's strip policy, for one opted-in session or every manifest entry. Server bytes/hash of the sanitized stream decide the offset; conflict or rewritten prefix triggers a full replacement |
 | `stop <id>` / `stop current` | Remove the local manifest entry and record a stop tombstone, without deleting the remote session. Durable: hook and manual sync stay off until a new consented upload. Returns a `share-session:opt-out <id>` marker; keep it in the conversation. `current` requires `CLAUDE_SESSION_ID`; otherwise pass the id |
-| `list [--project owner/repo] [--author email] [--mine] [--q text]` | Live sessions (synced within 90 days), newest first. Render as a compact table: id, title, project, author, date, messages |
+| `list [--project slug] [--repo owner/repo] [--author email] [--mine] [--q text]` | Live sessions (synced within 90 days) of your projects, newest first. Render as a compact table: id, title, project, repo, author, date, messages |
+| `project list` | Your projects with your role, member and session counts |
+| `project create <slug> [--name <name>]` | New project (`a-z`, `0-9`, inner dashes, 64 chars max), you become its owner |
+| `project show <slug>` | Project and its members with their roles (members only) |
+| `project add <slug> <email> [--role reader\|writer\|owner]` | Owners: add a member, or change their role. Default `reader` |
+| `project remove <slug> <email>` | Owners: remove a member. Anyone: remove yourself |
 
 The current session's transcript is `~/.claude/projects/<cwd with every non-alphanumeric char replaced by ->/<session id>.jsonl`.
 
@@ -80,7 +102,7 @@ Sync publishes complete lines and waits for an unfinished final line. It reads t
 
 ## Browser reader
 
-Open the configured app URL in the browser to filter sessions by project, author, UTC update period, or title/summary. Open `/s/<id>` to read the whole conversation in a scrollable container opened at the latest messages, with collapsed tools and token usage deduplicated by `message.id`. Transcript content is displayed as text.
+Open the configured app URL in the browser to filter sessions of your projects by project, repo, author, UTC update period, or title/summary. Open `/s/<id>` to read the whole conversation in a scrollable container opened at the latest messages, with collapsed tools and token usage deduplicated by `message.id`. Transcript content is displayed as text.
 
 The **Reprendre** button copies `/share-session pull <id>` for use in Claude Code. The pull command is delivered by T05; the reader only copies the instruction.
 
@@ -89,7 +111,12 @@ The **Reprendre** button copies `/share-session pull <id>` for use in Claude Cod
 - `invalid_config`: fix or delete the override config file.
 - `cloudflared_missing`: propose `brew install cloudflared`.
 - `login_required` or `unauthorized`: ask the user to run `cloudflared access login https://sessions.example.com`, then rerun `doctor`.
-- `forbidden` on upload: the session id already belongs to someone else.
+- `project_required`: a first upload needs `--project <slug>`; ask the user which project (see "Projects and rights").
+- `forbidden` on upload or sync: the session id already belongs to someone else, or the user is not `writer` on the project. The message says which.
+- `forbidden` on `project add/remove`: only owners manage members.
+- `not_found` on a session or project: it does not exist, or the user is not a member of its project.
+- `bad_request: project is locked to …`: drop `--project`, the session inherits its project.
+- `conflict`: the project slug is taken, or the change would leave the project without an owner.
 - `confirmation_mismatch`: request a new preview and user agreement for the current content and options.
 - `invalid_jsonl`: an incomplete or malformed line was refused without sending it; retry once the transcript finishes writing.
 
@@ -99,7 +126,7 @@ The **Reprendre** button copies `/share-session pull <id>` for use in Claude Cod
 
 The surface comes from `CLAUDE_CODE_ENTRYPOINT`; unknown/cloud entrypoints fall back to terminal. Desktop is pending HITL location/index verification and returns `unsupported_target`; use `--target terminal` to import to terminal history. No Desktop location is assumed.
 
-Pull stores provenance in `manifest.forks` and leaves sync opt-in to a later consented upload. Upload the new transcript path using the normal preview/confirmation flow; in broker mode obtain a write token scoped to the **new** UUID. The client sends `forked_from`; the server validates that the original exists and derives its owner from D1. The fork belongs to the uploader, and its detail page links back with “forké depuis”. The original remains intact.
+Pull stores provenance in `manifest.forks` and leaves sync opt-in to a later consented upload. Upload the new transcript path using the normal preview/confirmation flow; in broker mode obtain a write token scoped to the **new** UUID. The client sends `forked_from`; the server validates that the original exists and derives its owner from D1. The fork stays in the original's project (the uploader needs `writer` there) and belongs to the uploader, and its detail page links back with “forké depuis”. The original remains intact.
 
 ## Automatic sync at turn end (local)
 

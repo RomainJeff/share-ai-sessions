@@ -6,10 +6,10 @@ const ORIGIN = "https://sessions.example.com";
 async function get(path: string) {
   return SELF.fetch(ORIGIN + path, { headers: { "Cf-Access-Jwt-Assertion": await mintJwt() } });
 }
-async function seed(title: string, records: unknown[] = [], project = "acme/repo") {
+async function seed(title: string, records: unknown[] = [], repo = "acme/repo") {
   const id = crypto.randomUUID();
   const form = new FormData();
-  form.set("meta", JSON.stringify({ id, title, project, branch: "main", model: "claude-test" }));
+  form.set("meta", JSON.stringify({ id, title, project: "team", repo, branch: "main", model: "claude-test" }));
   form.set("jsonl", new File([records.map((r) => JSON.stringify(r)).join("\n") + "\n"], "s.jsonl"));
   const response = await SELF.fetch(ORIGIN + "/api/sessions", {
     method: "POST", body: form, headers: { "Cf-Access-Jwt-Assertion": await mintJwt({ email: ALICE, name: "Alice" }) },
@@ -157,7 +157,7 @@ describe("web reader", () => {
     const other = await seed("Other hit", [], "else/repo");
     await env.DB.prepare("UPDATE sessions SET updated_at = ?, summary = ? WHERE id = ?").bind(Date.parse("2026-06-01T23:59:59Z"), "needle", older).run();
     await env.DB.prepare("UPDATE sessions SET updated_at = ?, summary = ? WHERE id = ?").bind(Date.parse("2026-06-02T12:00:00Z"), "needle", newer).run();
-    const html = await (await get(`/?project=acme/repo&author=${ALICE}&q=needle&from=2026-06-01&to=2026-06-02`)).text();
+    const html = await (await get(`/?repo=acme/repo&author=${ALICE}&q=needle&from=2026-06-01&to=2026-06-02`)).text();
     expect(html).toContain(`/s/${older}`);
     expect(html.indexOf("Newer hit")).toBeLessThan(html.indexOf("Older hit"));
     expect(html).not.toContain(`/s/${other}`);
@@ -284,10 +284,10 @@ describe("web reader", () => {
   it("keeps active filters while paging the list by 100, and escapes search values", async () => {
     const id = await seed("Pagination", [], "paging/repo");
     await env.DB.batch(Array.from({ length: 100 }, (_, n) => env.DB.prepare(`INSERT INTO sessions
-      (id, owner_email, owner_name, project, title, created_at, updated_at, last_synced_at)
-      VALUES (?, ?, 'Alice', 'paging/repo', ?, ?, ?, ?)`).bind(
+      (id, owner_email, owner_name, project, repo, title, created_at, updated_at, last_synced_at)
+      VALUES (?, ?, 'Alice', 'team', 'paging/repo', ?, ?, ?, ?)`).bind(
       crypto.randomUUID(), ALICE, `Pagination ${n}`, Date.now(), Date.now() + n + 1, Date.now())));
-    const query = `project=paging%2Frepo&author=${encodeURIComponent(ALICE)}&q=Pagination`;
+    const query = `repo=paging%2Frepo&author=${encodeURIComponent(ALICE)}&q=Pagination`;
     const first = await (await get(`/?${query}`)).text();
     expect(first.match(/<a class="card" /g)).toHaveLength(100);
     expect(first).toContain(`href="/?${query.replaceAll("&", "&amp;")}&amp;page=2"`);

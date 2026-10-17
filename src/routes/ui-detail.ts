@@ -1,5 +1,5 @@
 import type { Identity } from "../auth";
-import { VISIBLE, visibleSince } from "../db";
+import { MEMBER, VISIBLE, visibleSince } from "../db";
 import { author, dateLabel, escapeHtml as e, icon, page } from "../ui";
 
 type RecordLine = { type?: string; timestamp?: string; isMeta?: boolean; isCompactSummary?: boolean; toolUseResult?: unknown; message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, number> } };
@@ -57,11 +57,11 @@ function renderRow({ raw, data }: TranscriptRecord): string {
 /** GET /s/:id — metadata is retention-checked before reading any transcript from R2. */
 export async function sessionDetailPage(request: Request, env: Env, who: Identity, params: Record<string, string>): Promise<Response> {
   const id = params.id!;
-  const session = await env.DB.prepare(`SELECT * FROM sessions WHERE id = ? AND ${VISIBLE}`)
-    .bind(id, visibleSince()).first<Record<string, string | number | null>>();
+  const session = await env.DB.prepare(`SELECT * FROM sessions WHERE id = ? AND ${VISIBLE} AND ${MEMBER}`)
+    .bind(id, visibleSince(), who.email).first<Record<string, string | number | null>>();
   if (!session) return page("Session introuvable", "<h1>Session introuvable</h1>", 404);
-  const continuation = await env.DB.prepare(`SELECT id FROM sessions WHERE continued_from = ? AND ${VISIBLE} ORDER BY created_at DESC LIMIT 1`)
-    .bind(id, visibleSince()).first<{ id: string }>();
+  const continuation = await env.DB.prepare(`SELECT id FROM sessions WHERE continued_from = ? AND ${VISIBLE} AND ${MEMBER} ORDER BY created_at DESC LIMIT 1`)
+    .bind(id, visibleSince(), who.email).first<{ id: string }>();
 
   // T02 stores plain JSONL; also read the gzip segments used by incremental sync.
   const keys: string[] = [];
@@ -125,6 +125,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
       <div class="line">${author(session.owner_name, session.owner_email)}
         <span class="badge">synchro ${dateLabel(Number(session.last_synced_at), true)}</span>
         <span class="badge mono">${icon("folder")}${e(session.project)}</span>
+        ${session.repo ? `<span class="badge mono">${icon("term")}${e(session.repo)}</span>` : ""}
         ${session.branch ? `<span class="badge mono">${icon("branch")}${e(session.branch)}</span>` : ""}
         ${model ? `<span class="chip">${icon("chip")}${e(model)}</span>` : ""}
         ${session.continued_from ? `<span class="badge">${icon("branch")}suite de <a href="/s/${e(encodeURIComponent(String(session.continued_from)))}">${e(session.continued_from)}</a></span>` : ""}
@@ -137,7 +138,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
     </header>
     <aside class="side" aria-label="Informations de la session">
       <details class="panel" data-meta open><summary>Informations<span class="tchev">${icon("chev")}</span></summary><div class="pb"><dl class="meta">
-        ${meta("Auteur", session.owner_email)}${meta("Projet", session.project, true)}${meta("Branche", session.branch, true)}
+        ${meta("Auteur", session.owner_email)}${meta("Projet", session.project, true)}${meta("Repo", session.repo, true)}${meta("Branche", session.branch, true)}
         ${meta("Dossier d’origine", session.cwd_base, true)}${meta("Modèle", model)}${meta("Claude Code", session.cc_version)}
         <dt>Créée</dt><dd>${dateLabel(Number(session.created_at))}</dd>
         <dt>Mise à jour</dt><dd>${dateLabel(Number(session.updated_at))}</dd>
@@ -145,7 +146,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
         ${meta("Messages", records.length)}${meta("Tokens", tokens)}${meta("Réponses API", usages.size)}${meta("Taille", `${Number(session.bytes)} octets`)}${meta("Identifiant", id, true)}
       </dl></div></details>
       <details class="panel"><summary>Commande de reprise<span class="tchev">${icon("chev")}</span></summary><div class="pb resume-help">
-        <p class="hint">Collez cette commande dans Claude Code, ouvert dans votre copie de <span class="mono">${e(session.project)}</span>.</p>
+        <p class="hint">Collez cette commande dans Claude Code, ouvert dans votre copie de <span class="mono">${e(session.repo || session.project)}</span>.</p>
         <div class="cmd"><code id="resume-command">${e(command)}</code></div>
         <p class="hint">La copie sera une nouvelle session à votre nom. Celle-ci reste intacte.</p>
       </div></details>

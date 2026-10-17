@@ -5,7 +5,7 @@ import { ALICE, BOB, mintJwt } from "./jwt";
 const BASE = "https://sessions.example.com";
 async function upload(jwt: string, meta: Record<string, unknown>, jsonl = "{}\n") {
   const form = new FormData();
-  form.set("meta", JSON.stringify({ project: "acme/repo", ...meta }));
+  form.set("meta", JSON.stringify({ project: "team", repo: "acme/repo", ...meta }));
   form.set("jsonl", new File([jsonl], "s.jsonl"));
   return SELF.fetch(`${BASE}/api/sessions`, { method: "POST", headers: { Authorization: `Bearer ${jwt}` }, body: form });
 }
@@ -25,7 +25,7 @@ it("Alice uploads, Bob pulls and re-uploads a new session with server-derived pr
   const response = await get(bob, `/api/sessions/${origin}/bundle`, true);
   expect(response.status).toBe(200);
   const bundle = await response.json() as { session: Record<string, unknown>; jsonl: string; tool_results: Record<string, string> };
-  expect(bundle.session).toMatchObject({ id: origin, owner_email: ALICE, owner_name: "Alice", project: "acme/repo", branch: "main", cwd_base: "/home/alice/repo" });
+  expect(bundle.session).toMatchObject({ id: origin, owner_email: ALICE, owner_name: "Alice", project: "team", repo: "acme/repo", branch: "main", cwd_base: "/home/alice/repo" });
   expect(bundle.jsonl).toBe(source);
   const bytes = Uint8Array.from(atob(bundle.tool_results["result.txt"]!), (c) => c.charCodeAt(0));
   expect(new TextDecoder().decode(bytes)).toBe("Full result 🦓");

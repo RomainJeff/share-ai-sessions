@@ -9,6 +9,7 @@ import { sync } from "./commands/sync.ts";
 import { stop } from "./commands/stop.ts";
 import { pull } from "./commands/pull.ts";
 import { hookStop } from "./commands/hook-stop.ts";
+import { project } from "./commands/project.ts";
 import { ClientError } from "./lib.ts";
 
 // One line per command; each command lives in its own file under commands/.
@@ -19,6 +20,7 @@ const COMMANDS: Record<string, (args: string[]) => Promise<unknown>> = {
   sync: (args) => sync(args),
   stop: (args) => stop(args),
   pull: (args) => pull(args),
+  project: (args) => project(args),
   "hook-stop": () => hookStop(),
 };
 

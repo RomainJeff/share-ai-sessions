@@ -11,7 +11,7 @@ const enc = (s: string) => s.replace(/[^A-Za-z0-9]/g, "-");
 const quoted = (s: string) => JSON.stringify(s).slice(1, -1);
 type Line = Record<string, any>;
 type Bundle = {
-  session: { id: string; owner_email: string; owner_name: string; project: string; branch: string | null; cwd_base: string | null };
+  session: { id: string; owner_email: string; owner_name: string; project: string; repo?: string | null; branch: string | null; cwd_base: string | null };
   jsonl: string;
   // Paths relative to tool-results/, with base64 bytes. Absent until external files are bundled.
   tool_results?: Record<string, string>;
@@ -60,7 +60,7 @@ function transplant(bundle: Bundle, id: string, cwd: string): string {
   const note = `<session-share-context>
 Origin session: ${origin.id}
 Author: ${origin.owner_name} (${origin.owner_email})
-Project: ${origin.project}
+Project: ${origin.project}${origin.repo ? ` (repo ${origin.repo})` : ""}
 Branch: ${origin.branch ?? "unknown"}
 Original cwd: ${originalCwd ?? "unknown"}
 Current cwd: ${cwd}
