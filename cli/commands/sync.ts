@@ -9,23 +9,22 @@ import { sanitize, send } from "./upload.ts";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Recover a cache entry (path + strip policy) from Claude's standard transcript location, never from credentials. */
-async function locate(id: string): Promise<{ path: string; strip: RedactionOptions }> {
+export async function resolveSession(id: string, transcriptPath?: string): Promise<{ path: string; strip: RedactionOptions } | undefined> {
   if (!UUID.test(id)) throw new ClientError("usage", "Session id must be a UUID");
+  const entry = (await readManifest()).sessions[id];
+  if (entry) return { path: entry.path, strip: entry.strip ?? {} };
   const root = join(homedir(), ".claude/projects");
-  for (const dir of await readdir(root, { withFileTypes: true }).catch(() => [])) {
-    if (!dir.isDirectory()) continue;
-    const path = join(root, dir.name, `${id}.jsonl`);
+  const paths = transcriptPath ? [transcriptPath] : (await readdir(root, { withFileTypes: true }).catch(() => []))
+    .filter((dir) => dir.isDirectory()).map((dir) => join(root, dir.name, `${id}.jsonl`));
+  for (const path of paths) {
     const text = await readFile(path, "utf8").catch(() => "");
     // Last marker wins: it carries the strip policy of the latest consented upload.
     const flags = [...text.matchAll(new RegExp(`share-session:opt-in ${id}((?: --strip-[a-z-]+)*)`, "g"))].at(-1)?.[1];
     if (flags !== undefined) return { path, strip: { stripThinking: flags.includes("--strip-thinking"), stripToolResults: flags.includes("--strip-tool-results") } };
   }
-  throw new ClientError("not_found", "No opted-in transcript found; upload it first");
 }
 
-async function syncOne(id: string): Promise<unknown> {
-  const entry = (await readManifest()).sessions[id];
-  const { path, strip } = entry ? { path: entry.path, strip: entry.strip ?? {} } : await locate(id);
+export async function syncSession(id: string, { path, strip }: { path: string; strip: RedactionOptions }): Promise<unknown> {
   const bytes = await readFile(path);
   // A writer may be in the middle of a line. Publish complete lines only.
   const source = bytes.subarray(0, bytes.lastIndexOf(10) + 1).toString("utf8");
@@ -58,6 +57,12 @@ async function syncOne(id: string): Promise<unknown> {
     if (error instanceof ClientError && error.code === "offset_mismatch") return send(path, source, strip);
     throw error;
   }
+}
+
+async function syncOne(id: string): Promise<unknown> {
+  const session = await resolveSession(id);
+  if (!session) throw new ClientError("not_found", "No opted-in transcript found; upload it first");
+  return syncSession(id, session);
 }
 
 export async function sync(args: string[]): Promise<unknown> {

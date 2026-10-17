@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/cli/client.ts\" hook-stop",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
