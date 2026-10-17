@@ -24,4 +24,4 @@ INSERT OR IGNORE INTO projects (slug, name, created_by, created_at)
   SELECT 'legacy', 'Sessions d''avant les projets', lower(MIN(owner_email)), CAST(strftime('%s', 'now') AS INTEGER) * 1000
   FROM sessions HAVING COUNT(*) > 0;
 INSERT OR IGNORE INTO project_members (project, email, role, added_by, added_at)
-  SELECT DISTINCT 'legacy', lower(owner_email), 'owner', 'migration', CAST(strftime('%s', 'now') AS INTEGER) * 1000 FROM sessions
+  SELECT DISTINCT 'legacy', lower(owner_email), 'owner', 'migration', CAST(strftime('%s', 'now') AS INTEGER) * 1000 FROM sessions;
