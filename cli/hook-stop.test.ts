@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { main } from "../../../.agents/skills/share-session/scripts/client.ts";
 import { upload } from "../../../.agents/skills/share-session/scripts/commands/upload.ts";
+import { stop } from "../../../.agents/skills/share-session/scripts/commands/stop.ts";
 import { CONFIG_PATH } from "../../../.agents/skills/share-session/scripts/lib.ts";
 
 async function syncFixture() {
@@ -59,6 +60,11 @@ async function syncFixture() {
   return {
     temp, id, path, manifest, line,
     remote: () => remote,
+    /** Manifest entry as left by a consented upload; the only opt-in the hook honours. */
+    optIn: async (strip = {}) => {
+      await mkdir(join(temp, ".claude/session-share"), { recursive: true });
+      await writeFile(manifest, JSON.stringify({ sessions: { [id]: { id, path, offset: 0, last_line_hash: "", url: "", strip } } }));
+    },
     fetches: () => fetches,
     authCalls: () => authCalls,
     missingToken: () => { tokenMissing = true; },
@@ -119,23 +125,64 @@ test("three Stop turns silently sync sanitized bytes for a manifest opt-in", asy
   } finally { await f.cleanup(); }
 });
 
-test("Stop recovers the latest strip policy from the supplied transcript without a manifest", async () => {
+test("Stop ignores a transcript opt-in marker without a manifest entry", async () => {
   const f = await syncFixture();
   try {
-    const path = join(f.temp, "restored.jsonl");
+    await writeFile(f.path, f.line(`share-session:opt-in ${f.id} --strip-thinking`));
+    assert.deepEqual(await f.invoke(), { stdout: "", stderr: "" });
+    assert.equal(f.fetches(), 0);
+    assert.equal(f.authCalls(), 0);
+  } finally { await f.cleanup(); }
+});
+
+test("Stop syncs the manifest strip policy", async () => {
+  const f = await syncFixture();
+  try {
     const blocks = (content: object[]) => JSON.stringify({ type: "assistant", sessionId: f.id, message: { content } }) + "\n";
-    const marker = f.line(`share-session:opt-in ${f.id}`) + f.line(`share-session:opt-in ${f.id} --strip-thinking --strip-tool-results`);
-    await writeFile(path, marker + blocks([{ type: "thinking", thinking: "private reasoning" }, { type: "text", text: "visible answer" }]));
-    assert.deepEqual(await f.invoke(false, path), { stdout: "", stderr: "" });
-    assert.equal(f.remote(), marker + blocks([{ type: "text", text: "visible answer" }]));
-    assert.deepEqual(JSON.parse(await readFile(f.manifest, "utf8")).sessions[f.id].strip, { stripThinking: true, stripToolResults: true });
+    await writeFile(f.path, blocks([{ type: "thinking", thinking: "private reasoning" }, { type: "text", text: "visible answer" }]));
+    await f.optIn({ stripThinking: true, stripToolResults: true });
+    assert.deepEqual(await f.invoke(), { stdout: "", stderr: "" });
+    assert.equal(f.remote(), blocks([{ type: "text", text: "visible answer" }]));
+  } finally { await f.cleanup(); }
+});
+
+test("upload, stop, then Stop hook does not fetch", async () => {
+  const f = await syncFixture();
+  try {
+    await writeFile(f.path, f.line("start"));
+    const { confirmation } = await upload(f.path) as { confirmation: string };
+    const { marker } = await upload(f.path, { confirm: confirmation }) as { marker: string };
+    const result = await stop([f.id]) as { marker: string };
+    assert.equal(result.marker, `share-session:opt-out ${f.id}`);
+    await appendFile(f.path, f.line(marker) + f.line(result.marker) + f.line("after stop"));
+    const count = f.fetches();
+    assert.deepEqual(await f.invoke(), { stdout: "", stderr: "" });
+    assert.equal(f.fetches(), count);
+  } finally { await f.cleanup(); }
+});
+
+test("upload, stop, new consented upload: Stop hook syncs again", async () => {
+  const f = await syncFixture();
+  try {
+    await writeFile(f.path, f.line("start"));
+    let { confirmation } = await upload(f.path) as { confirmation: string };
+    await upload(f.path, { confirm: confirmation });
+    const { marker } = await stop([f.id]) as { marker: string };
+    await appendFile(f.path, f.line(marker));
+    ({ confirmation } = await upload(f.path) as { confirmation: string });
+    await upload(f.path, { confirm: confirmation });
+    assert.equal(JSON.parse(await readFile(f.manifest, "utf8")).stopped[f.id], undefined);
+    await appendFile(f.path, f.line("resumed"));
+    assert.deepEqual(await f.invoke(), { stdout: "", stderr: "" });
+    assert.ok(f.remote().endsWith(f.line("resumed")));
   } finally { await f.cleanup(); }
 });
 
 test("missing token blocks once with MCP recovery instructions and never on the active Stop", async () => {
   const f = await syncFixture();
   try {
-    await writeFile(f.path, f.line(`share-session:opt-in ${f.id}`));
+    await writeFile(f.path, f.line("start"));
+    await f.optIn();
     f.missingToken();
     const first = await f.invoke();
     const decision = JSON.parse(first.stdout);
@@ -151,7 +198,8 @@ test("missing token blocks once with MCP recovery instructions and never on the 
 test("expired or redirected Access credentials request recovery without a Stop loop", async () => {
   const f = await syncFixture();
   try {
-    await writeFile(f.path, f.line(`share-session:opt-in ${f.id}`));
+    await writeFile(f.path, f.line("start"));
+    await f.optIn();
     for (const status of [401, 302]) {
       f.status(status);
       assert.equal(JSON.parse((await f.invoke()).stdout).decision, "block");
@@ -163,7 +211,8 @@ test("expired or redirected Access credentials request recovery without a Stop l
 test("unexpected Stop errors stay off stdout and do not leak upstream details", async () => {
   const f = await syncFixture();
   try {
-    await writeFile(f.path, f.line(`share-session:opt-in ${f.id}`));
+    await writeFile(f.path, f.line("start"));
+    await f.optIn();
     f.networkError();
     for (const raw of [undefined, "{invalid", "null"]) {
       const result = await f.invoke(false, f.path, raw);
@@ -195,6 +244,9 @@ test("hook-stop executable exits zero without the usual CLI result envelope", as
     assert.equal(result.stdout, "");
     assert.equal(result.stderr, "");
     await appendFile(f.path, f.line(`share-session:opt-in ${f.id}`));
+    result = run(false);
+    assert.equal(result.stdout, "", "a transcript marker alone is not consent");
+    await f.optIn();
     result = run(false);
     assert.equal(result.status, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).decision, "block");

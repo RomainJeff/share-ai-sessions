@@ -114,9 +114,15 @@ test("manual sync uses server bytes after cache loss, handles 409/rewrite, and s
     await sync([id]);
     assert.equal(requests.at(-1)!.method, "POST");
     assert.equal(requests.at(-1)!.body, text.replace(secret, "[REDACTED:github]"));
-    await stop([id]);
+    const stopped = await stop([id]) as { marker: string };
     assert.deepEqual(await sync(["--all"]), []);
     assert.equal(JSON.parse(await readFile(manifest, "utf8")).sessions[id], undefined);
+    // Stop is durable: the opt-in marker still in the transcript must not revive manual sync.
+    text += line(stopped.marker) + line("after stop");
+    await writeFile(path, text);
+    const before = requests.length;
+    await assert.rejects(sync([id]), { code: "stopped" });
+    assert.equal(requests.length, before);
   } finally {
     await fixture.cleanup();
   }
@@ -163,6 +169,18 @@ test("sync recovers both strip flags from the last opt-in marker after manifest 
     assert.ok(!patch.body.includes("new private reasoning"));
     assert.ok(!patch.body.includes("new private result"));
     assert.deepEqual(JSON.parse(await readFile(manifest, "utf8")).sessions[id].strip, strip);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("manual sync refuses when an opt-out marker follows the opt-in and the manifest is lost", async () => {
+  const fixture = await syncFixture();
+  const { id, path, line, requests } = fixture;
+  try {
+    await writeFile(path, line(`share-session:opt-in ${id}`) + line(`share-session:opt-out ${id}`) + line("later"));
+    await assert.rejects(sync([id]), { code: "not_found" });
+    assert.equal(requests.length, 0);
   } finally {
     await fixture.cleanup();
   }
