@@ -130,7 +130,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
         ${continuation ? `<span class="badge">${icon("branch")}suite dans <a href="/s/${e(encodeURIComponent(String(continuation.id)))}">${e(continuation.id)}</a></span>` : ""}
         ${session.forked_from ? `<span class="badge">${icon("branch")}forké depuis <a href="/s/${e(encodeURIComponent(String(session.forked_from)))}">${e(session.forked_from)}</a> · ${e(session.forked_from_owner)}</span>` : ""}
       </div>
-      <p class="hint">${tokens} tokens · ${usages.size} réponses API (usage dédupliqué par message.id) · ${records.length} lignes de conversation</p>
+      <p class="hint">${tokens} tokens · ${records.length} messages</p>
       ${session.owner_email !== who.email ? `<p class="ro-note">Lecture seule : session de ${e(session.owner_email)}. Si vous la reprenez, la copie sera à votre nom.</p>` : ""}
       <div class="actionbar gutter"><div class="in"><button class="btn primary" type="button" data-copy="${e(command)}">${icon("branch")}Reprendre</button></div></div>
     </header>
@@ -141,7 +141,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
         <dt>Créée</dt><dd>${dateLabel(Number(session.created_at))}</dd>
         <dt>Mise à jour</dt><dd>${dateLabel(Number(session.updated_at))}</dd>
         <dt>Dernière synchro</dt><dd>${dateLabel(Number(session.last_synced_at))}</dd>
-        ${meta("Messages", records.length)}${meta("Tokens", tokens)}${meta("Taille", `${Number(session.bytes)} octets`)}${meta("Identifiant", id, true)}
+        ${meta("Messages", records.length)}${meta("Tokens", tokens)}${meta("Réponses API", usages.size)}${meta("Taille", `${Number(session.bytes)} octets`)}${meta("Identifiant", id, true)}
       </dl></div></details>
       <details class="panel"><summary>Commande de reprise<span class="tchev">${icon("chev")}</span></summary><div class="pb resume-help">
         <p class="hint">Collez cette commande dans Claude Code, ouvert dans votre copie de <span class="mono">${e(session.project)}</span>.</p>

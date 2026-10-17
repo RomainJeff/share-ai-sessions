@@ -134,10 +134,21 @@ describe("web reader", () => {
     expect(html).toContain("const conversation=document.getElementById('conversation');");
     const script = html.match(/<script nonce="([^"]+)">([^]*?)<\/script>/)!;
     expect(script[2]).toContain("conversation.scrollTop=conversation.scrollHeight");
-    expect(script[2]).toContain("conversation.getBoundingClientRect().top");
+    expect(script[2]).toContain("conversation.getBoundingClientRect()");
     expect(script[2]).toContain("actionbar.getBoundingClientRect().height");
     expect(script[2]).toContain("conversation.scrollIntoView({block:'nearest'})");
+    expect(script[2]).toContain("window.visualViewport?.addEventListener('resize',sizeConversation)");
+    expect(html).toMatch(/\.transcript\{[^}]*max-height:[^;]*100vh/);
     expect(response.headers.get("content-security-policy")).toContain(`script-src 'nonce-${script[1]}'`);
+  });
+
+  it("keeps sharing instructions behind a disclosure and the download reachable without JavaScript", async () => {
+    const html = await (await get("/")).text();
+    const help = html.match(/<details class="panel share-help">([^]*?)<\/details>/)?.[1];
+    expect(help).toBeDefined();
+    expect(help).toContain("Partager une session");
+    expect(help).toContain('class="btn" href="/share-session.skill" download');
+    expect(html).toContain('id="filters" aria-labelledby="filters-title" open');
   });
 
   it("filters title/summary, project, author and inclusive UTC period, newest first", async () => {
@@ -169,7 +180,8 @@ describe("web reader", () => {
     const text = html.match(/<main[^>]*>([^]*?)<\/main>/)![1]!.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
     expect(html).toContain("Alice · alice@example.com");
     expect(text).toContain("acme/repo main claude-test");
-    expect(html).toContain("37 tokens · 1 réponses API");
+    expect(html).toContain("37 tokens · 101 messages");
+    expect(html).toContain("<dt>Réponses API</dt><dd>1</dd>");
     expect(html.match(/<article /g)).toHaveLength(101);
     expect(html).toMatch(/<details class="tool"><summary>[^]*?Outil : Read[^]*?<\/summary>/);
     expect(html).toMatch(/<details class="tool"><summary>[^]*?Résultat : read-id[^]*?<\/summary>/);
