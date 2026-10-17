@@ -45,12 +45,13 @@ describe("web reader", () => {
     ];
     const id = await seed("Reader test", records);
     const html = await (await get(`/s/${id}`)).text();
+    const text = html.match(/<main[^>]*>([^]*?)<\/main>/)![1]!.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
     expect(html).toContain("Alice · alice@example.com");
-    expect(html).toContain("acme/repo@main · claude-test");
+    expect(text).toContain("acme/repo main claude-test");
     expect(html).toContain("37 tokens · 1 réponses API");
     expect(html.match(/<article /g)).toHaveLength(100);
-    expect(html).toContain("<details><summary>Outil : Read</summary>");
-    expect(html).toContain("<details><summary>Résultat : read-id</summary>");
+    expect(html).toMatch(/<details class="tool"><summary>[^]*?Outil : Read[^]*?<\/summary>/);
+    expect(html).toMatch(/<details class="tool"><summary>[^]*?Résultat : read-id[^]*?<\/summary>/);
     expect(html).toContain("Result body");
     expect(html).toContain(`data-copy="/share-session pull ${id}"`);
     const second = await (await get(`/s/${id}?page=2`)).text();
@@ -71,11 +72,34 @@ describe("web reader", () => {
       expect(response.headers.get("content-security-policy")).toContain("default-src 'none'");
       expect(response.headers.get("cache-control")).toContain("no-store");
       const html = await response.text();
+      const nonce = html.match(/<script nonce="([^"]+)">/)?.[1];
+      expect(nonce).toBeTruthy();
+      expect(response.headers.get("content-security-policy")).toContain(`script-src 'nonce-${nonce}'`);
+      expect(response.headers.get("content-security-policy")).not.toContain("script-src 'unsafe-inline'");
+      expect(html).not.toMatch(/<(?:link|script)[^>]+(?:href|src)=/);
       expect(html).not.toContain(attack);
       expect(html).not.toContain("<img");
       expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
       expect(html.match(/<script /g)).toHaveLength(1);
     }
+  });
+
+  it("keeps active filters while paging the list by 100, and escapes search values", async () => {
+    const id = await seed("Pagination", [], "paging/repo");
+    await env.DB.batch(Array.from({ length: 100 }, (_, n) => env.DB.prepare(`INSERT INTO sessions
+      (id, owner_email, owner_name, project, title, created_at, updated_at, last_synced_at)
+      VALUES (?, ?, 'Alice', 'paging/repo', ?, ?, ?, ?)`).bind(
+      crypto.randomUUID(), ALICE, `Pagination ${n}`, Date.now(), Date.now() + n + 1, Date.now())));
+    const query = `project=paging%2Frepo&author=${encodeURIComponent(ALICE)}&q=Pagination`;
+    const first = await (await get(`/?${query}`)).text();
+    expect(first.match(/<a class="card" /g)).toHaveLength(100);
+    expect(first).toContain(`href="/?${query.replaceAll("&", "&amp;")}&amp;page=2"`);
+    const second = await (await get(`/?${query}&page=2`)).text();
+    expect(second.match(/<a class="card" /g)).toHaveLength(1);
+    expect(second).toContain(`/s/${id}`);
+    const hostile = await (await get('/?q=%22%3E%3Cscript%3Ealert(1)%3C%2Fscript%3E')).text();
+    expect(hostile).toContain('value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"');
+    expect(hostile).not.toContain('<script>alert(1)</script>');
   });
 
   it("authenticates both pages and hides expired or unknown sessions", async () => {
