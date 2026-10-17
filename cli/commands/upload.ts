@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { api, ClientError } from "../lib.ts";
-import { trackUpload } from "../manifest.ts";
+import { readManifest, trackUpload } from "../manifest.ts";
 import { detectProject } from "../project.ts";
 import { redactJsonl, type RedactionOptions } from "../redact.ts";
 
@@ -46,15 +46,16 @@ export function sanitize(jsonl: string, options: RedactionOptions = {}) {
   return redactJsonl(jsonl, options);
 }
 
-function prepare(path: string, jsonl: string, options: RedactionOptions) {
+async function prepare(path: string, jsonl: string, options: RedactionOptions) {
   const { cwd, ...meta } = readMeta(jsonl, path);
-  const body = { ...meta, cwd_base: cwd, project: detectProject(cwd ?? process.cwd()) };
+  const fork = (await readManifest()).forks?.[meta.id];
+  const body = { ...meta, cwd_base: cwd, project: detectProject(cwd ?? process.cwd()), ...fork };
   return { id: meta.id, redacted: sanitize(jsonl, options), metadata: redactJsonl(JSON.stringify(body)) };
 }
 
 /** POST a full sanitized replacement and record the local source snapshot. Callers own consent. */
 export async function send(path: string, jsonl: string, options: RedactionOptions = {}): Promise<unknown> {
-  const { id, redacted, metadata } = prepare(path, jsonl, options);
+  const { id, redacted, metadata } = await prepare(path, jsonl, options);
   const form = new FormData();
   form.set("meta", metadata.jsonl);
   form.set("jsonl", new Blob([redacted.jsonl], { type: "application/x-ndjson" }), "session.jsonl");
@@ -70,7 +71,7 @@ export async function upload(path: string, options: UploadOptions = {}): Promise
   } catch {
     throw new ClientError("not_found", `Cannot read ${path}`);
   }
-  const { redacted, metadata } = prepare(path, jsonl, options);
+  const { redacted, metadata } = await prepare(path, jsonl, options);
   const replacements = { ...redacted.replacements };
   for (const [kind, count] of Object.entries(metadata.replacements)) replacements[kind] = (replacements[kind] ?? 0) + count;
   const preview = {

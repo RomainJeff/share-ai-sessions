@@ -63,7 +63,13 @@ test('CLI previews without auth/network, binds confirmation to content/options, 
 
 test('CLI strip flags produce a distinct preview and malformed input never reaches fetch', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'session-share-preview-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
+  t.mock.method(os, 'homedir', () => dir);
+  syncBuiltinESMExports();
+  t.after(async () => {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+    await rm(dir, { recursive: true, force: true });
+  });
   const path = join(dir, 'fixture.jsonl');
   t.mock.method(globalThis, 'fetch', () => { throw new Error('unexpected network'); });
   await writeFile(path, jsonl);
