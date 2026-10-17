@@ -164,6 +164,9 @@ dl.meta dd{margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .col{display:flex;flex-direction:column;gap:6px;min-width:0;max-width:85%}
 .turn.ai .col{flex:1}
 .turn.me .col{align-items:flex-end}
+.turn.system{color:hsl(var(--muted-foreground));padding-left:42px}
+.turn.system .col{flex:1}
+.turn.system .bubble{font-size:13px;color:inherit}
 .meta-l{font-size:12px;color:hsl(var(--muted-foreground));display:flex;gap:6px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
 .meta-l b{color:hsl(var(--foreground));font-weight:500}
 .bubble{border-radius:var(--radius);padding:10px 14px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;font-size:14px;max-width:100%}

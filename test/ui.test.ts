@@ -60,10 +60,77 @@ describe("web reader", () => {
     expect(second).toContain("Page 2 / 2");
   });
 
+  it("attributes only human prompts to the user and keeps tool/context records reachable", async () => {
+    const records = [
+      { type: "user", message: { content: "Explain this change" } },
+      { type: "user", toolUseResult: { stdout: "Read output" }, message: { content: [{ type: "tool_result", tool_use_id: "read-id", content: "Read output" }] } },
+      { type: "user", isMeta: true, message: { content: "Injected context" } },
+      { type: "user", message: { content: "<command-name>/clear</command-name>" } },
+    ];
+    const id = await seed("Attribution", records);
+    const html = await (await get(`/s/${id}`)).text();
+    const rows = html.match(/<article\b[^]*?<\/article>/g)!;
+    expect(rows).toHaveLength(4);
+    expect(html.match(/data-role="user"/g)).toHaveLength(1);
+    expect(html.match(/<b>Utilisateur<\/b>/g)).toHaveLength(1);
+    expect(rows[0]).toContain('class="turn me" data-role="user"');
+    expect(rows[0]).toContain('aria-hidden="true">U</span>');
+    expect(rows[0]).toContain("Explain this change");
+    expect(rows[1]).toContain('class="turn ai" data-role="tool"');
+    expect(rows[1]).toMatch(/<details class="tool"><summary>[^]*?Résultat : read-id/);
+    for (const row of rows.slice(1)) {
+      expect(row).not.toContain("Utilisateur");
+      expect(row).not.toContain('aria-hidden="true">U</span>');
+      expect(row).not.toContain('class="turn me"');
+    }
+    for (const row of rows.slice(2)) {
+      expect(row).toContain('data-role="system"');
+      expect(row).toMatch(/<details class="reason context"><summary>[^]*?Contexte/);
+      expect(row).not.toMatch(/<details[^>]*\bopen\b/);
+    }
+    for (const [index, record] of records.entries()) {
+      expect(rows[index]).toContain("JSON brut");
+      expect(rows[index]).toContain(JSON.stringify(record).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;"));
+    }
+    expect(html).toContain("<dt>Messages</dt><dd>4</dd>");
+  });
+
+  it("distinguishes harness-only text from human text and image prompts", async () => {
+    const cases = [
+      { role: "user", message: { content: [{ type: "text", text: "Review this" }, { type: "image", source: { type: "base64", data: "test" } }] } },
+      { role: "user", message: { content: [{ type: "image", source: { type: "base64", data: "test" } }] } },
+      { role: "user", message: { content: "<system-reminder>Injected</system-reminder>\nMy real question" } },
+      { role: "user", message: { content: "Explain <command-name> to me" } },
+      { role: "user", message: { content: "[Request interrupted by user]\nMy real question" } },
+      { role: "system", isCompactSummary: true, message: { content: "Conversation summary" } },
+      { role: "system", message: { content: "  <command-message>clear</command-message>\n<command-name>/clear</command-name>  " } },
+      { role: "system", message: { content: "<local-command-stdout>Done</local-command-stdout>" } },
+      { role: "system", message: { content: "<local-command-caveat>Local only</local-command-caveat>" } },
+      { role: "system", message: { content: [{ type: "text", text: "<system-reminder>Injected</system-reminder>" }] } },
+      { role: "system", message: { content: "[Request interrupted by user for tool use]" } },
+      { role: "system", message: { content: "[Request interrupted by user]\n[Request interrupted by user for tool use]" } },
+      { role: "system", message: { content: [{ type: "text", text: "Text" }, { type: "thinking", thinking: "Internal" }] } },
+      { role: "system", message: { content: [] } },
+      { role: "system", message: { content: { unexpected: "value" } } },
+      { role: "tool", toolUseResult: null, message: { content: "Tool output without blocks" } },
+      { role: "tool", message: { content: [{ type: "tool_result", content: "Tool output without metadata" }] } },
+    ];
+    const id = await seed("Prompt shapes", cases.map(({ role, ...record }) => ({ type: "user", ...record })));
+    const html = await (await get(`/s/${id}`)).text();
+    const rows = html.match(/<article\b[^]*?<\/article>/g)!;
+    expect(rows).toHaveLength(cases.length);
+    for (const [index, { role }] of cases.entries()) {
+      expect(rows[index]).toContain(`data-role="${role}"`);
+      expect(rows[index]?.includes("<b>Utilisateur</b>")).toBe(role === "user");
+    }
+  });
+
   it("renders hostile transcript and metadata as text with no executable markup", async () => {
     const attack = '</pre><script>alert(1)</script><img src=x onerror="alert(2)">';
     const id = await seed(attack, [
       { type: "user", message: { content: attack } },
+      { type: "user", isMeta: true, message: { content: attack } },
+      { type: "user", toolUseResult: {}, message: { content: attack } },
       { type: "assistant", message: { content: [{ type: "tool_use", name: attack, input: { value: attack } }, { type: "tool_result", content: [{ type: "text", text: attack }] }] } },
     ]);
     for (const path of ["/", `/s/${id}`]) {

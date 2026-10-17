@@ -2,7 +2,21 @@ import type { Identity } from "../auth";
 import { VISIBLE, visibleSince } from "../db";
 import { author, dateLabel, escapeHtml as e, icon, page } from "../ui";
 
-type RecordLine = { type?: string; timestamp?: string; message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, number> } };
+type RecordLine = { type?: string; timestamp?: string; isMeta?: boolean; isCompactSummary?: boolean; toolUseResult?: unknown; message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, number> } };
+
+/** Claude Code also uses user records for tool results and injected context. */
+function isHumanPrompt(data: RecordLine): boolean {
+  if (data.type !== "user" || data.isMeta || data.isCompactSummary || "toolUseResult" in data) return false;
+  const value = data.message?.content;
+  if (typeof value !== "string" && (!Array.isArray(value) || !value.every((b) =>
+    b?.type === "image" || (b?.type === "text" && typeof b.text === "string")))) return false;
+  const text = typeof value === "string" ? value : value.filter((b) => b.type === "text").map((b) => b.text).join("\n");
+  // Keep human text alongside wrappers; wrapper-only records belong to context.
+  const prompt = text.replace(/<(command-[\w-]+|local-command-[\w-]+|system-reminder)\b[^>]*>[\s\S]*?<\/\1>/g, "")
+    .replace(/^(?:\s*\[Request interrupted[^\]\r\n]*\])+\s*/, "").trim();
+  return (Array.isArray(value) && value.some((b) => b.type === "image")) ||
+    prompt.length > 0;
+}
 
 function tool(label: string, body: string): string {
   return `<details class="tool"><summary><span class="ticon">${icon("term")}</span><span class="tlabel"><b>${e(label)}</b></span><span class="tchev">${icon("chev")}</span></summary><div class="tbody">${body}</div></details>`;
@@ -94,11 +108,22 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
     </aside>
     <section class="chat" aria-label="Conversation"><h2 class="chat-title">Conversation</h2>
       ${invalid ? `<p class="ro-note">${invalid} ligne(s) JSONL invalide(s) ignorée(s).</p>` : ""}
-      ${records.slice((current - 1) * 100, current * 100).map(({ raw, data }) => `<article class="turn ${data.type === "user" ? "me" : "ai"}" data-role="${data.type}">
-        <span class="avatar lg${data.type === "assistant" ? " av-ai" : ""}" aria-hidden="true">${data.type === "user" ? "U" : "C"}</span>
-        <div class="col"><div class="meta-l"><b>${data.type === "user" ? "Utilisateur" : "Claude"}</b>${data.timestamp ? dateLabel(data.timestamp) : ""}</div>
-          ${content(data.message?.content)}<details class="reason raw"><summary>${icon("chev")}JSON brut</summary><pre class="code">${e(raw)}</pre></details>
-        </div></article>`).join("") || '<p class="empty">Aucun message.</p>'}
+      ${records.slice((current - 1) * 100, current * 100).map(({ raw, data }) => {
+        const value = data.message?.content;
+        const hasToolResult = Array.isArray(value) && value.some((b) => b?.type === "tool_result");
+        const role = isHumanPrompt(data) ? "user" : data.type === "assistant" ? "assistant" :
+          hasToolResult || "toolUseResult" in data ? "tool" : "system";
+        const rawHtml = `<details class="reason raw"><summary>${icon("chev")}JSON brut</summary><pre class="code">${e(raw)}</pre></details>`;
+        const time = data.timestamp ? dateLabel(data.timestamp) : "";
+        if (role === "system") return `<article class="turn system" data-role="system"><div class="col">
+          <details class="reason context"><summary>${icon("chev")}Contexte ${time}</summary>
+            ${content(value)}${rawHtml}</details></div></article>`;
+        return `<article class="turn ${role === "user" ? "me" : "ai"}" data-role="${role}">
+          <span class="avatar lg${role === "user" ? "" : " av-ai"}" aria-hidden="true">${role === "user" ? "U" : "C"}</span>
+          <div class="col"><div class="meta-l"><b>${role === "user" ? "Utilisateur" : "Claude"}</b>${time}</div>
+            ${role === "tool" && !hasToolResult ? tool("Résultat", content(value, true)) : content(value)}${rawHtml}
+          </div></article>`;
+      }).join("") || '<p class="empty">Aucun message.</p>'}
       <nav class="pagination" aria-label="Pagination de la conversation">${current > 1 ? `<a class="btn" href="?page=${current - 1}">Précédent</a>` : ""}<span>Page ${current} / ${lastPage}</span>${current < lastPage ? `<a class="btn" href="?page=${current + 1}">Suivant</a>` : ""}</nav>
     </section></div>`, 200, true);
 }
