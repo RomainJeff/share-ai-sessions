@@ -46,11 +46,11 @@ test('CLI previews without auth/network, binds confirmation to content/options, 
   assert.equal(preview.status, 'confirmation_required');
   assert.equal(preview.preview.lines, 18);
   assert.ok(preview.preview.replacements.openai > 0);
-  assert.match(preview.confirmation, /^[a-f0-9]{64}$/);
+  assert.match(preview.confirmation, /^[a-f0-9]{64}\.\d+$/);
   assert.equal(calls, 0);
   await assert.rejects(main(['upload', path, '--confirm', 'yes']), { code: 'confirmation_mismatch' });
   await assert.rejects(main(['upload', path, '--strip-thinking', '--confirm', preview.confirmation]), { code: 'confirmation_mismatch' });
-  await writeFile(path, source + '{}\n');
+  await writeFile(path, source.replace(sessionId, sessionId.replace(/.$/, (c) => c === 'a' ? 'b' : 'a'))); // same-length rewrite of previewed bytes voids consent; appends do not
   await assert.rejects(main(['upload', path, '--confirm', preview.confirmation]), { code: 'confirmation_mismatch' });
   assert.equal(calls, 0);
   await writeFile(path, source);

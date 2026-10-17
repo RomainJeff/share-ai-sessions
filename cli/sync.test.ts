@@ -63,7 +63,10 @@ test("manual sync uses server bytes after cache loss, handles 409/rewrite, and s
     let text = line("départ 🦓");
     await writeFile(path, text);
     const { confirmation } = await upload(path) as { confirmation: string };
+    // The live session appends between preview and confirm: only the previewed bytes are sent.
+    await writeFile(path, text + line("written after preview"));
     const result = await upload(path, { confirm: confirmation }) as { marker: string };
+    assert.equal(requests.at(-1)!.body, text);
     assert.equal(result.marker, `share-session:opt-in ${id}`);
     assert.equal((JSON.parse(await readFile(manifest, "utf8"))).sessions[id].offset, Buffer.byteLength(text));
     assert.ok(!(await readFile(manifest, "utf8")).includes("never.persist.this"));
