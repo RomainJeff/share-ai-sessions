@@ -4,7 +4,7 @@ compatibility_date = "2026-08-01"
 
 # Access protects the custom domain, not workers.dev.
 workers_dev = false
-routes = [{ pattern = "sessions.example.com", custom_domain = true }]
+routes = [{ pattern = "sessions.example.com", custom_domain = true }, { pattern = "sessions-mcp.example.com", custom_domain = true }]
 
 [[r2_buckets]]
 binding = "SESSIONS"
@@ -18,7 +18,14 @@ database_name = "claude-session-share"
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "./migrations"
 
+# Provision in T12. The MCP host requires an Access Bypass policy; OAuth uses the
+# allowlisted Access SaaS OIDC app. Secrets: BROKER_SIGNING_KEY (>=32 bytes), OIDC_CLIENT_SECRET.
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "00000000000000000000000000000000"
+
 [vars]
+OIDC_CLIENT_ID = "replace-with-access-saas-oidc-client-id"
 # Public identifiers, not secrets.AUD is a placeholder
 # until the Access app for sessions.example.com exists (T00).
 ACCESS_TEAM_DOMAIN = "example.cloudflareaccess.com"

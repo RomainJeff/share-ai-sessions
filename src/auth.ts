@@ -1,6 +1,8 @@
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 
-export type Identity = { email: string; name: string };
+import { verifyBroker } from "./broker";
+
+export type Identity = { email: string; name: string; brokerScope?: string };
 
 let remoteKeys: JWTVerifyGetKey | undefined;
 
@@ -19,6 +21,12 @@ export const keySource = {
  */
 export async function identify(request: Request, env: Env): Promise<Identity | null> {
   const bearer = request.headers.get("Authorization")?.match(/^Bearer (.+)$/)?.[1];
+  if (bearer) {
+    const broker = await verifyBroker(bearer, env);
+    if (broker) return { email: broker.email, name: broker.email.split("@")[0]!, brokerScope: broker.scope };
+  }
+  // The bypass host accepts only broker tokens for data, never an edge Access header.
+  if (new URL(request.url).hostname === "sessions-mcp.example.com") return null;
   const token = request.headers.get("Cf-Access-Jwt-Assertion") ?? bearer;
   if (!token) return null;
   try {

@@ -1,3 +1,4 @@
+import { decodeJwt } from "jose";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -52,12 +53,33 @@ export function accessToken(baseUrl: string): string {
 
 /** Authenticated call to the API. `cf-access-token` passes the Access edge; the Worker reads either header. */
 export async function api(path: string, init: RequestInit = {}): Promise<unknown> {
-  const baseUrl = await loadBaseUrl();
-  const token = accessToken(baseUrl);
+  // Broker mode needs neither local config nor a cloudflared installation.
+  const brokerToken = process.env.SESSION_TOKEN;
+  let baseUrl: string;
+  let token: string;
+  if (brokerToken !== undefined) {
+    try {
+      // Routing/expiry check only; the Worker verifies the signature. Pin the origin so an
+      // untrusted issuer claim cannot redirect a credential to another host.
+      const claims = decodeJwt(brokerToken);
+      if (claims.iss !== "https://sessions-mcp.example.com" || claims.aud !== "session-share-cli" || typeof claims.exp !== "number") {
+        throw new Error();
+      }
+      if (claims.exp * 1000 <= Date.now()) throw new ClientError("token_expired", "Call get_token for a fresh broker token");
+      baseUrl = claims.iss;
+      token = brokerToken;
+    } catch (error) {
+      if (error instanceof ClientError) throw error;
+      throw new ClientError("invalid_token", "SESSION_TOKEN is not a Session Share broker token");
+    }
+  } else {
+    baseUrl = await loadBaseUrl();
+    token = accessToken(baseUrl);
+  }
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     redirect: "manual", // an Access login redirect means the token was refused
-    headers: { ...init.headers, "cf-access-token": token, Authorization: `Bearer ${token}` },
+    headers: { ...init.headers, ...(!brokerToken ? { "cf-access-token": token } : {}), Authorization: `Bearer ${token}` },
   });
   if (response.status === 401 || response.status === 403 || (response.status >= 300 && response.status < 400)) {
     throw new ClientError(response.status === 403 ? "forbidden" : "unauthorized", `Access refused (${response.status})`);
