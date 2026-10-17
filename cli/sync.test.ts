@@ -135,6 +135,7 @@ test("sync recovers both strip flags from the last opt-in marker after manifest 
     assert.equal(requests.length, 0, "preview must not upload");
     const { marker } = await upload(path, { ...strip, confirm: confirmation }) as { marker: string };
     assert.equal(marker, `share-session:opt-in ${id} --strip-thinking --strip-tool-results`);
+    assert.deepEqual(JSON.parse(await readFile(manifest, "utf8")).sessions[id].strip, strip, "manifest stores only the policy, never the confirm hash");
     const uploaded = requests[0]!;
     assert.equal(uploaded.method, "POST");
     assert.ok(Buffer.byteLength(uploaded.body) < Buffer.byteLength(text), "server bytes must differ from source bytes");

@@ -30,7 +30,9 @@ export function lastLineHash(bytes: Uint8Array): string {
   while (start >= 0 && bytes[start] !== 10) start--;
   return createHash("sha256").update(bytes.slice(start + 1)).digest("hex");
 }
-export async function trackUpload(id: string, path: string, bytes: Uint8Array, strip: RedactionOptions = {}): Promise<void> {
+export async function trackUpload(id: string, path: string, bytes: Uint8Array, { stripThinking, stripToolResults }: RedactionOptions = {}): Promise<void> {
+  // Keep only the policy: callers may pass upload options (e.g. the confirm hash).
+  const strip = { stripThinking, stripToolResults };
   const manifest = await readManifest();
   manifest.sessions[id] = { id, path: resolve(path), offset: bytes.length, last_line_hash: lastLineHash(bytes), url: `${await loadBaseUrl()}/s/${id}`, strip };
   await writeManifest(manifest);
