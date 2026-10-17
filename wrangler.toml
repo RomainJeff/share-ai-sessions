@@ -13,7 +13,6 @@ bucket_name = "claude-session-share"
 [[d1_databases]]
 binding = "DB"
 database_name = "claude-session-share"
-# Placeholder until `wrangler d1 create claude-session-share` (T12).
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "./migrations"
 
