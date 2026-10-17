@@ -159,6 +159,8 @@ dl.meta dd{margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 
 /* Conversation façon messagerie (chat shadcn) */
 .chat{display:flex;flex-direction:column;gap:20px;min-width:0}
+.transcript{max-height:max(8rem,calc(100dvh - var(--transcript-top,20rem) - var(--transcript-bottom,104px)));overflow-y:auto;overscroll-behavior-y:contain;scroll-margin-top:80px;scroll-margin-bottom:var(--transcript-bottom,104px);padding:2px}
+.transcript>*{flex-shrink:0}
 .turn{display:flex;gap:10px;align-items:flex-start;min-width:0}
 .turn.me{flex-direction:row-reverse}
 .col{display:flex;flex-direction:column;gap:6px;min-width:0;max-width:85%}
@@ -228,7 +230,6 @@ pre.bubble{font-family:var(--f-sans)}
 .retention{margin:16px 0}
 .pagination{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:12px;margin-top:20px;color:hsl(var(--muted-foreground));font-size:12px}
 .pagination .btn{color:hsl(var(--foreground))}
-.detail .chat .pagination{margin-top:0}
 .tchev{margin-left:auto}
 .raw{margin-top:4px;max-width:100%;align-self:stretch}
 .raw>summary{min-height:32px}
@@ -333,6 +334,20 @@ for(const button of document.querySelectorAll('[data-copy]'))button.addEventList
 });
 const info=document.querySelector('[data-sidebar-info]');
 if(info){const wide=window.matchMedia('(min-width:1000px)');info.open=wide.matches;wide.addEventListener('change',()=>{info.open=wide.matches;});}
+const conversation=document.getElementById('conversation');
+if(conversation){
+  function sizeConversation(){
+    const actionbar=document.querySelector('.actionbar');
+    const bottom=window.matchMedia('(min-width:1000px)').matches?24:(actionbar?actionbar.getBoundingClientRect().height:88)+16;
+    conversation.style.setProperty('--transcript-top',Math.max(0,conversation.getBoundingClientRect().top)+'px');
+    conversation.style.setProperty('--transcript-bottom',bottom+'px');
+  }
+  sizeConversation();
+  conversation.scrollTop=conversation.scrollHeight;
+  conversation.scrollIntoView({block:'nearest'});
+  window.addEventListener('resize',sizeConversation);
+  for(const panel of document.querySelectorAll('.side details'))panel.addEventListener('toggle',sizeConversation);
+}
 const filters=document.getElementById('filters');
 const toggle=document.querySelector('[data-filter-toggle]');
 if(filters&&toggle&&typeof filters.showModal==='function'){

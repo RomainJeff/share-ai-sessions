@@ -80,7 +80,7 @@ Sync publishes complete lines and waits for an unfinished final line. It reads t
 
 ## Browser reader
 
-Open the configured app URL in the browser to filter sessions by project, author, UTC update period, or title/summary. Open `/s/<id>` to read pages of 100 conversation rows, with collapsed tools and token usage deduplicated by `message.id`. Transcript content is displayed as text.
+Open the configured app URL in the browser to filter sessions by project, author, UTC update period, or title/summary. Open `/s/<id>` to read the whole conversation in a scrollable container opened at the latest messages, with collapsed tools and token usage deduplicated by `message.id`. Transcript content is displayed as text.
 
 The **Reprendre** button copies `/share-session pull <id>` for use in Claude Code. The pull command is delivered by T05; the reader only copies the instruction.
 

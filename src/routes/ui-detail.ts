@@ -92,15 +92,10 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
   }
   const tokens = [...usages.values()].reduce((total, usage) => total +
     ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"].reduce((sum, k) => sum + (Number(usage[k]) || 0), 0), 0);
-  const requested = Number(new URL(request.url).searchParams.get("page")) || 1;
-  const lastPage = Math.max(1, Math.ceil(records.length / 100));
-  const current = Math.min(lastPage, Math.max(1, Math.floor(requested)));
   let conversation = "";
   for (let start = 0, end = 0; start < records.length; start = end) {
     end = start + 1;
     while (end < records.length && !isHumanPrompt(records[end]!.data)) end++;
-    const from = Math.max(start, (current - 1) * 100), to = Math.min(end, current * 100);
-    if (from >= to) continue;
     const prompt = isHumanPrompt(records[start]!.data) ? records[start] : undefined;
     let final = -1;
     if (prompt) for (let i = start + 1; i < end; i++) {
@@ -109,17 +104,16 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
       if (data.type === "assistant" && (typeof value === "string" ? value.trim() :
         Array.isArray(value) && value.some((b) => b?.type === "text" && typeof b.text === "string" && b.text.trim()))) final = i;
     }
-    if (prompt && from === start) conversation += renderRow(prompt);
-    const steps = records.slice(from, to).filter((_, i) => from + i !== final && !(prompt && from + i === start));
+    if (prompt) conversation += renderRow(prompt);
+    const steps = records.slice(start, end).filter((_, i) => start + i !== final && !(prompt && i === 0));
     if (steps.length) {
-      // Turn endpoints and final answer come from the full transcript, even across pages.
       const elapsed = Date.parse(records[end - 1]!.data.timestamp || "") - Date.parse(prompt?.data.timestamp || "");
       const minutes = Math.floor(elapsed / 60000);
       const duration = minutes < 1 ? "moins d'une minute" : minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
       const label = Number.isFinite(elapsed) && elapsed >= 0 ? `A travaillé pendant ${duration}` : "Étapes intermédiaires";
       conversation += `<details class="worked"><summary>${icon("chev")}<span>${e(label)} · ${steps.length} étape${steps.length === 1 ? "" : "s"}</span></summary><div>${steps.map(renderRow).join("")}</div></details>`;
     }
-    if (final >= from && final < to) conversation += renderRow(records[final]!);
+    if (final >= 0) conversation += renderRow(records[final]!);
   }
   const command = `/share-session pull ${id}`;
   const model = session.model || records.find((r) => r.data.message?.model)?.data.message?.model;
@@ -155,9 +149,8 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
         <p class="hint">La copie sera une nouvelle session à votre nom. Celle-ci reste intacte.</p>
       </div></details>
     </aside>
-    <section class="chat" aria-label="Conversation"><h2 class="chat-title">Conversation</h2>
+    <section class="chat transcript" id="conversation" tabindex="0" aria-label="Conversation"><h2 class="chat-title">Conversation</h2>
       ${invalid ? `<p class="ro-note">${invalid} ligne(s) JSONL invalide(s) ignorée(s).</p>` : ""}
       ${conversation || '<p class="empty">Aucun message.</p>'}
-      <nav class="pagination" aria-label="Pagination de la conversation">${current > 1 ? `<a class="btn" href="?page=${current - 1}">Précédent</a>` : ""}<span>Page ${current} / ${lastPage}</span>${current < lastPage ? `<a class="btn" href="?page=${current + 1}">Suivant</a>` : ""}</nav>
     </section></div>`, 200, true);
 }

@@ -104,22 +104,40 @@ describe("web reader", () => {
     expect(inside[0]).toContain(`${label} · 1 étape`);
   });
 
-  it("keeps full-turn timing and final-answer visibility across 100-record pages", async () => {
-    const id = await seed("Paged turn", [
+  it("renders a turn longer than 100 rows in full without pagination", async () => {
+    const id = await seed("Long turn", [
       { type: "user", timestamp: "2026-10-17T10:00:00Z", message: { content: "Long question" } },
       ...Array.from({ length: 100 }, (_, n) => ({ type: "assistant", timestamp: "2026-10-17T10:01:00Z", message: { content: `Progress ${n}` } })),
-      { type: "assistant", timestamp: "2026-10-17T10:12:00Z", message: { content: "Paged final" } },
+      { type: "assistant", timestamp: "2026-10-17T10:12:00Z", message: { content: "Long final" } },
     ]);
-    for (const [page, steps] of [[1, 99], [2, 1]]) {
-      const html = await (await get(`/s/${id}?page=${page}`)).text();
+    for (const query of ["", "?page=2"]) {
+      const html = await (await get(`/s/${id}${query}`)).text();
       const { inside, outside } = await workedParts(html);
       expect(inside).toHaveLength(1);
-      expect(inside[0]).toContain(`A travaillé pendant 12 min · ${steps} étape${steps === 1 ? "" : "s"}`);
+      expect(inside[0]).toContain("A travaillé pendant 12 min · 100 étapes");
+      for (let n = 0; n < 100; n++) expect(inside[0]).toContain(`Progress ${n}`);
       expect(outside).not.toContain("Progress ");
-      expect(outside.includes("Paged final")).toBe(page === 2);
-      expect(html.match(/<article /g)).toHaveLength(page === 1 ? 100 : 2);
-      expect(html).toContain(`href="?page=${page === 1 ? 2 : 1}"`);
+      expect(outside).toContain("Long question");
+      expect(outside).toContain("Long final");
+      expect(html.match(/<article /g)).toHaveLength(102);
+      expect(html).not.toContain("?page=");
+      expect(html).not.toContain('<nav class="pagination"');
     }
+  });
+
+  it("provides a viewport-bounded conversation scroller opened at the bottom", async () => {
+    const id = await seed("Scrollable", [{ type: "user", message: { content: "Latest prompt" } }]);
+    const response = await get(`/s/${id}`);
+    const html = await response.text();
+    expect(html).toContain('<section class="chat transcript" id="conversation" tabindex="0" aria-label="Conversation">');
+    expect(html).toMatch(/\.transcript\{[^}]*max-height:[^}]*100dvh[^}]*overflow-y:auto/);
+    expect(html).toContain("const conversation=document.getElementById('conversation');");
+    const script = html.match(/<script nonce="([^"]+)">([^]*?)<\/script>/)!;
+    expect(script[2]).toContain("conversation.scrollTop=conversation.scrollHeight");
+    expect(script[2]).toContain("conversation.getBoundingClientRect().top");
+    expect(script[2]).toContain("actionbar.getBoundingClientRect().height");
+    expect(script[2]).toContain("conversation.scrollIntoView({block:'nearest'})");
+    expect(response.headers.get("content-security-policy")).toContain(`script-src 'nonce-${script[1]}'`);
   });
 
   it("filters title/summary, project, author and inclusive UTC period, newest first", async () => {
@@ -139,7 +157,7 @@ describe("web reader", () => {
     expect((await get("/?from=2026-02-31")).status).toBe(400);
   });
 
-  it("shows metadata, deduplicated tokens, collapsed tools and 100 conversation rows per page", async () => {
+  it("shows metadata, deduplicated tokens, collapsed tools and every conversation row", async () => {
     const records = [
       { type: "assistant", message: { id: "same", usage: { input_tokens: 10, output_tokens: 1 }, content: "First chunk" } },
       { type: "assistant", message: { id: "same", usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 20, cache_creation_input_tokens: 2 }, content: [{ type: "tool_use", name: "Read", input: { file: "demo.txt" } }] } },
@@ -152,15 +170,12 @@ describe("web reader", () => {
     expect(html).toContain("Alice · alice@example.com");
     expect(text).toContain("acme/repo main claude-test");
     expect(html).toContain("37 tokens · 1 réponses API");
-    expect(html.match(/<article /g)).toHaveLength(100);
+    expect(html.match(/<article /g)).toHaveLength(101);
     expect(html).toMatch(/<details class="tool"><summary>[^]*?Outil : Read[^]*?<\/summary>/);
     expect(html).toMatch(/<details class="tool"><summary>[^]*?Résultat : read-id[^]*?<\/summary>/);
     expect(html).toContain("Result body");
     expect(html).toContain(`data-copy="/share-session pull ${id}"`);
-    const second = await (await get(`/s/${id}?page=2`)).text();
-    expect(second.match(/<article /g)).toHaveLength(1);
-    expect(second).toContain("Prompt 97");
-    expect(second).toContain("Page 2 / 2");
+    expect(html).toContain("Prompt 97");
   });
 
   it("attributes only human prompts to the user and keeps tool/context records reachable", async () => {
