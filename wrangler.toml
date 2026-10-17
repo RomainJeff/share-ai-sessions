@@ -24,7 +24,7 @@ id = "00000000000000000000000000000000" # title: claude-session-share-oauth
 
 [vars]
 OIDC_CLIENT_ID = "replace-with-access-saas-oidc-client-id"
-# Public identifiers, not secrets.AUD is a placeholder
+# Public identifiers, not secrets.AUD
 # set from the sessions.example.com Access app (T00).
 ACCESS_TEAM_DOMAIN = "example.cloudflareaccess.com"
 ACCESS_AUD = "your-access-application-aud"
