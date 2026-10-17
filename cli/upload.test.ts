@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { main } from './client.ts';
-import { jsonl, secrets } from './fixtures/secrets.ts';
+import { jsonl, secrets, sessionId } from './fixtures/secrets.ts';
 
 test('CLI previews without auth/network, binds confirmation to content/options, sends only sanitized form data', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'session-share-redaction-'));
@@ -43,7 +43,7 @@ test('CLI previews without auth/network, binds confirmation to content/options, 
   assert.equal(calls, 0);
   await writeFile(path, source);
   await writeFile(join(dir, 'cloudflared'), '#!/bin/sh\nprintf "fake.access.token"\n', { mode: 0o700 });
-  assert.deepEqual(await main(['upload', path, '--confirm', preview.confirmation]), { id: 'uploaded' });
+  assert.deepEqual(await main(['upload', path, '--confirm', preview.confirmation]), { id: 'uploaded', marker: `share-session:opt-in ${sessionId}` });
   assert.equal(calls, 1);
   assert.equal(await readFile(path, 'utf8'), source, 'original remains untouched');
   fetch.mock.restore();

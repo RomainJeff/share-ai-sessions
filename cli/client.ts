@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { doctor } from "./commands/doctor.ts";
 import { list } from "./commands/list.ts";
 import { uploadCommand } from "./commands/upload.ts";
+import { sync } from "./commands/sync.ts";
+import { stop } from "./commands/stop.ts";
 import { ClientError } from "./lib.ts";
 
 // One line per command; each command lives in its own file under commands/.
@@ -12,6 +14,8 @@ const COMMANDS: Record<string, (args: string[]) => Promise<unknown>> = {
   doctor: () => doctor(),
   upload: uploadCommand,
   list: (args) => list(args),
+  sync: (args) => sync(args),
+  stop: (args) => stop(args),
 };
 
 export async function main(argv: string[]): Promise<unknown> {

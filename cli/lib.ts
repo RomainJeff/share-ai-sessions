@@ -62,6 +62,8 @@ export async function api(path: string, init: RequestInit = {}): Promise<unknown
   if (response.status === 401 || response.status === 403 || (response.status >= 300 && response.status < 400)) {
     throw new ClientError(response.status === 403 ? "forbidden" : "unauthorized", `Access refused (${response.status})`);
   }
+  if (response.status === 409) throw new ClientError("offset_mismatch", "Server offset changed; full upload required");
+  if (response.status === 404) throw new ClientError("not_found", "Session not found");
   if (!response.ok) throw new ClientError("http_error", `Server answered ${response.status}`);
   return response.json();
 }

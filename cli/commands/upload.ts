@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { api, ClientError } from "../lib.ts";
+import { trackUpload } from "../manifest.ts";
 import { detectProject } from "../project.ts";
 import { redactJsonl, type RedactionOptions } from "../redact.ts";
 
@@ -34,18 +35,42 @@ export function readMeta(jsonl: string, fileName: string) {
   };
 }
 
-export async function upload(path: string, options: RedactionOptions & { confirm?: string } = {}): Promise<unknown> {
+export type UploadOptions = RedactionOptions & { confirm?: string };
+
+/** Opt-in marker echoed on stdout; Claude's transcript keeps it, so sync can recover id and strip policy after a lost manifest. */
+export const optInMarker = (id: string, options: RedactionOptions = {}) =>
+  `share-session:opt-in ${id}${options.stripThinking ? " --strip-thinking" : ""}${options.stripToolResults ? " --strip-tool-results" : ""}`;
+
+/** Redaction of complete lines only; per-line and deterministic, so sanitized(prefix) is a prefix of sanitized(all). */
+export function sanitize(jsonl: string, options: RedactionOptions = {}) {
+  return redactJsonl(jsonl, options);
+}
+
+function prepare(path: string, jsonl: string, options: RedactionOptions) {
+  const { cwd, ...meta } = readMeta(jsonl, path);
+  const body = { ...meta, cwd_base: cwd, project: detectProject(cwd ?? process.cwd()) };
+  return { id: meta.id, redacted: sanitize(jsonl, options), metadata: redactJsonl(JSON.stringify(body)) };
+}
+
+/** POST a full sanitized replacement and record the local source snapshot. Callers own consent. */
+export async function send(path: string, jsonl: string, options: RedactionOptions = {}): Promise<unknown> {
+  const { id, redacted, metadata } = prepare(path, jsonl, options);
+  const form = new FormData();
+  form.set("meta", metadata.jsonl);
+  form.set("jsonl", new Blob([redacted.jsonl], { type: "application/x-ndjson" }), "session.jsonl");
+  const result = await api("/api/sessions", { method: "POST", body: form });
+  await trackUpload(id, path, Buffer.from(jsonl), options);
+  return { ...(result as object), marker: optInMarker(id, options) };
+}
+
+export async function upload(path: string, options: UploadOptions = {}): Promise<unknown> {
   let jsonl: string;
   try {
     jsonl = await readFile(path, "utf8");
   } catch {
     throw new ClientError("not_found", `Cannot read ${path}`);
   }
-  const { cwd, ...meta } = readMeta(jsonl, path);
-  const body = { ...meta, cwd_base: cwd, project: detectProject(cwd ?? process.cwd()) };
-
-  const redacted = redactJsonl(jsonl, options);
-  const metadata = redactJsonl(JSON.stringify(body));
+  const { redacted, metadata } = prepare(path, jsonl, options);
   const replacements = { ...redacted.replacements };
   for (const [kind, count] of Object.entries(metadata.replacements)) replacements[kind] = (replacements[kind] ?? 0) + count;
   const preview = {
@@ -66,11 +91,7 @@ export async function upload(path: string, options: RedactionOptions & { confirm
   if (options.confirm !== confirmation) {
     throw new ClientError('confirmation_mismatch', 'Transcript or options changed, or confirmation is invalid; request a fresh preview and confirm its hash');
   }
-
-  const form = new FormData();
-  form.set("meta", metadata.jsonl);
-  form.set("jsonl", new Blob([redacted.jsonl], { type: "application/x-ndjson" }), "session.jsonl");
-  return api("/api/sessions", { method: "POST", body: form });
+  return send(path, jsonl, options);
 }
 
 /** Two-step consent also works in a noninteractive agent session; no blanket --yes bypass. */

@@ -1,11 +1,11 @@
 import { env } from "cloudflare:test";
 import { beforeAll } from "vitest";
+import syncMigration from "../migrations/0002_sync.sql?raw";
 import migration from "../migrations/0001_sessions.sql?raw";
 
-// ponytail: one migration, applied straight from source. Switch to readD1Migrations +
-// applyD1Migrations when a second one needs ordering.
+// Apply the schema migrations in order in the isolated local D1 instance.
 beforeAll(async () => {
-  for (const stmt of migration.split(";").map((s) => s.trim()).filter((s) => s && !/^--[^\n]*$/.test(s))) {
+  for (const stmt of [migration, syncMigration].join(";\n").split(";").map((s) => s.trim()).filter((s) => s && !/^--[^\n]*$/.test(s))) {
     await env.DB.prepare(stmt).run();
   }
 });

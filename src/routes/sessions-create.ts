@@ -1,5 +1,6 @@
 import type { Identity } from "../auth";
 import { segmentKey } from "../db";
+import { lastLineHash } from "../transcript";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -37,23 +38,34 @@ export async function createSession(request: Request, env: Env, who: Identity): 
     return Response.json({ error: "forbidden" }, { status: 403 });
   }
 
-  await env.SESSIONS.put(segmentKey(id, 1), file.stream(), {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const hash = await lastLineHash(bytes);
+  await env.SESSIONS.put(segmentKey(id, 1), bytes, {
     httpMetadata: { contentType: "application/x-ndjson" },
   });
+
+  // A full replacement invalidates every old delta. Paginate R2 listings.
+  let cursor: string | undefined;
+  do {
+    const page = await env.SESSIONS.list({ prefix: `sessions/${id}/seg-`, cursor });
+    const stale = page.objects.filter((o) => o.key !== segmentKey(id, 1)).map((o) => o.key);
+    if (stale.length) await env.SESSIONS.delete(stale);
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
 
   const now = Date.now();
   const msgCount = typeof meta.msg_count === "number" ? Math.max(0, Math.floor(meta.msg_count)) : 0;
   await env.DB.prepare(
     `INSERT OR REPLACE INTO sessions
        (id, owner_email, owner_name, project, branch, title, cwd_base, model, cc_version,
-        msg_count, bytes, created_at, updated_at, last_synced_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        msg_count, bytes, created_at, updated_at, last_synced_at, last_line_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id, who.email, who.name, project, str(meta.branch), str(meta.title), str(meta.cwd_base, 1000),
-      str(meta.model), str(meta.cc_version), msgCount, file.size, existing?.created_at ?? now, now, now,
+      str(meta.model), str(meta.cc_version), msgCount, file.size, existing?.created_at ?? now, now, now, hash,
     )
     .run();
 
-  return Response.json({ id, owner_email: who.email, project, bytes: file.size }, { status: existing ? 200 : 201 });
+  return Response.json({ id, owner_email: who.email, project, bytes: file.size, last_line_hash: hash }, { status: existing ? 200 : 201 });
 }

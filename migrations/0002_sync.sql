@@ -1,0 +1,2 @@
+ALTER TABLE sessions ADD COLUMN segment_count INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE sessions ADD COLUMN last_line_hash TEXT;
