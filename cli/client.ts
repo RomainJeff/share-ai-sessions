@@ -8,6 +8,7 @@ import { uploadCommand } from "./commands/upload.ts";
 import { sync } from "./commands/sync.ts";
 import { stop } from "./commands/stop.ts";
 import { pull } from "./commands/pull.ts";
+import { hookStop } from "./commands/hook-stop.ts";
 import { ClientError } from "./lib.ts";
 
 // One line per command; each command lives in its own file under commands/.
@@ -18,6 +19,7 @@ const COMMANDS: Record<string, (args: string[]) => Promise<unknown>> = {
   sync: (args) => sync(args),
   stop: (args) => stop(args),
   pull: (args) => pull(args),
+  "hook-stop": () => hookStop(),
 };
 
 export async function main(argv: string[]): Promise<unknown> {
@@ -29,7 +31,8 @@ export async function main(argv: string[]): Promise<unknown> {
 
 if (process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) {
   try {
-    process.stdout.write(`${JSON.stringify(await main(process.argv.slice(2)))}\n`);
+    const result = await main(process.argv.slice(2));
+    if (process.argv[2] !== "hook-stop") process.stdout.write(`${JSON.stringify(result)}\n`);
   } catch (error) {
     const safe =
       error instanceof ClientError
