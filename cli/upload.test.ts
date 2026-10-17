@@ -55,8 +55,11 @@ test('CLI previews without auth/network, binds confirmation to content/options, 
   assert.equal(calls, 0);
   await writeFile(path, source);
   await writeFile(join(dir, 'cloudflared'), '#!/bin/sh\nprintf "fake.access.token"\n', { mode: 0o700 });
-  assert.deepEqual(await main(['upload', path, '--confirm', preview.confirmation]), { id: 'uploaded', marker: `share-session:opt-in ${sessionId}` });
-  assert.equal(calls, 1);
+  assert.deepEqual(await main(['upload', path, '--confirm', preview.confirmation]), { id: 'uploaded', marker: `share-session:opt-in ${sessionId}`, stop_hook: false });
+  await fs.mkdir(join(dir, '.claude'), { recursive: true });
+  await writeFile(join(dir, '.claude', 'settings.json'), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'node client.ts hook-stop' }] }] } }));
+  assert.equal((await main(['upload', path, '--confirm', preview.confirmation]) as any).stop_hook, true, 'Stop hook in ~/.claude/settings.json is detected');
+  assert.equal(calls, 2);
   assert.equal(await readFile(path, 'utf8'), source, 'original remains untouched');
   fetch.mock.restore();
 });
