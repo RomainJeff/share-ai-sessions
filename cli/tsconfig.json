@@ -9,5 +9,5 @@
     "allowImportingTsExtensions": true,
     "skipLibCheck": true
   },
-  "include": ["**/*.ts", "../skill/scripts/**/*.ts"]
+  "include": ["**/*.ts", "../skills/share-session/scripts/**/*.ts"]
 }

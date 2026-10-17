@@ -8,10 +8,10 @@ import cp from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { main } from "../skill/scripts/client.ts";
-import { upload } from "../skill/scripts/commands/upload.ts";
-import { stop } from "../skill/scripts/commands/stop.ts";
-import { CONFIG_PATH } from "../skill/scripts/lib.ts";
+import { main } from "../skills/share-session/scripts/client.ts";
+import { upload } from "../skills/share-session/scripts/commands/upload.ts";
+import { stop } from "../skills/share-session/scripts/commands/stop.ts";
+import { CONFIG_PATH } from "../skills/share-session/scripts/lib.ts";
 
 async function syncFixture() {
   const temp = await mkdtemp(join(os.tmpdir(), "session-share-hook-"));
@@ -229,7 +229,7 @@ test("unexpected Stop errors stay off stdout and do not leak upstream details", 
 test("hook-stop executable exits zero without the usual CLI result envelope", async () => {
   const f = await syncFixture();
   try {
-    const client = fileURLToPath(new URL("../skill/scripts/client.ts", import.meta.url));
+    const client = fileURLToPath(new URL("../skills/share-session/scripts/client.ts", import.meta.url));
     const preload = `import os from 'node:os'; import fs from 'node:fs/promises'; import cp from 'node:child_process'; import {syncBuiltinESMExports} from 'node:module';
       os.homedir = () => ${JSON.stringify(f.temp)};
       const read = fs.readFile;

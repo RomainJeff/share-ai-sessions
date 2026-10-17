@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { detectProject, normalizeRemote } from "../skill/scripts/project.ts";
+import { detectProject, normalizeRemote } from "../skills/share-session/scripts/project.ts";
 
 test("normalizeRemote handles every remote form", () => {
   for (const remote of [

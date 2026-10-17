@@ -7,10 +7,10 @@ import os from "node:os";
 import cp from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
-import { upload } from "../skill/scripts/commands/upload.ts";
-import { sync } from "../skill/scripts/commands/sync.ts";
-import { stop } from "../skill/scripts/commands/stop.ts";
-import { CONFIG_PATH } from "../skill/scripts/lib.ts";
+import { upload } from "../skills/share-session/scripts/commands/upload.ts";
+import { sync } from "../skills/share-session/scripts/commands/sync.ts";
+import { stop } from "../skills/share-session/scripts/commands/stop.ts";
+import { CONFIG_PATH } from "../skills/share-session/scripts/lib.ts";
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 

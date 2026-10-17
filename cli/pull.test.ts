@@ -8,8 +8,8 @@ import cp from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import type { TestContext } from "node:test";
-import { main } from "../skill/scripts/client.ts";
-import { CONFIG_PATH } from "../skill/scripts/lib.ts";
+import { main } from "../skills/share-session/scripts/client.ts";
+import { CONFIG_PATH } from "../skills/share-session/scripts/lib.ts";
 
 async function fixture(t: TestContext) {
   const home = await mkdtemp(join(os.tmpdir(), "session-share-pull-"));

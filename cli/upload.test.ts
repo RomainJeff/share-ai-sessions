@@ -5,8 +5,8 @@ import os, { tmpdir } from 'node:os';
 import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { main } from '../skill/scripts/client.ts';
-import { CONFIG_PATH } from '../skill/scripts/lib.ts';
+import { main } from '../skills/share-session/scripts/client.ts';
+import { CONFIG_PATH } from '../skills/share-session/scripts/lib.ts';
 import { jsonl, secrets, sessionId } from './fixtures/secrets.ts';
 
 test('CLI previews without auth/network, binds confirmation to content/options, sends only sanitized form data', async (t) => {
