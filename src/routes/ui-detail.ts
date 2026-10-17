@@ -120,6 +120,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
   const meta = (label: string, value: unknown, mono = false) => value == null || value === "" ? "" : `<dt>${label}</dt><dd${mono ? ' class="mono"' : ""}>${e(value)}</dd>`;
   return page(String(session.title || id), `<div class="detail">
     <header class="dhead"><h1>${e(session.title || id)}</h1>
+      <details class="hmeta" data-meta open><summary>${icon("chev")}Détails · ${tokens} tokens · ${records.length} messages</summary>
       ${session.summary ? `<p class="sum">${e(session.summary)}</p>` : ""}
       <div class="line">${author(session.owner_name, session.owner_email)}
         <span class="badge">synchro ${dateLabel(Number(session.last_synced_at), true)}</span>
@@ -130,12 +131,12 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
         ${continuation ? `<span class="badge">${icon("branch")}suite dans <a href="/s/${e(encodeURIComponent(String(continuation.id)))}">${e(continuation.id)}</a></span>` : ""}
         ${session.forked_from ? `<span class="badge">${icon("branch")}forké depuis <a href="/s/${e(encodeURIComponent(String(session.forked_from)))}">${e(session.forked_from)}</a> · ${e(session.forked_from_owner)}</span>` : ""}
       </div>
-      <p class="hint">${tokens} tokens · ${records.length} messages</p>
+      <p class="hint">${tokens} tokens · ${records.length} messages</p></details>
       ${session.owner_email !== who.email ? `<p class="ro-note">Lecture seule : session de ${e(session.owner_email)}. Si vous la reprenez, la copie sera à votre nom.</p>` : ""}
       <div class="actionbar gutter"><div class="in"><button class="btn primary" type="button" data-copy="${e(command)}">${icon("branch")}Reprendre</button></div></div>
     </header>
     <aside class="side" aria-label="Informations de la session">
-      <details class="panel" data-sidebar-info open><summary>Informations<span class="tchev">${icon("chev")}</span></summary><div class="pb"><dl class="meta">
+      <details class="panel" data-meta open><summary>Informations<span class="tchev">${icon("chev")}</span></summary><div class="pb"><dl class="meta">
         ${meta("Auteur", session.owner_email)}${meta("Projet", session.project, true)}${meta("Branche", session.branch, true)}
         ${meta("Dossier d’origine", session.cwd_base, true)}${meta("Modèle", model)}${meta("Claude Code", session.cc_version)}
         <dt>Créée</dt><dd>${dateLabel(Number(session.created_at))}</dd>

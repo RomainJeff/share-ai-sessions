@@ -130,6 +130,14 @@ body.is-detail main{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))
 .dhead .badge:has(a){flex-wrap:wrap}
 .dhead .badge a{display:inline-flex;align-items:center;min-height:44px;min-width:0;text-decoration:underline;text-underline-offset:3px}
 .dhead .chip svg,.dhead .badge svg{flex:none;width:12px;height:12px}
+.hmeta{min-width:0}
+.hmeta>summary{list-style:none;cursor:pointer;display:inline-flex;gap:6px;align-items:center;min-height:44px;font-size:13px;font-weight:500;color:hsl(var(--muted-foreground))}
+.hmeta>summary::-webkit-details-marker{display:none}
+.hmeta>summary svg{width:14px;height:14px;transition:transform .2s}
+.hmeta[open]>summary svg{transform:rotate(180deg)}
+.hmeta>:not(summary){margin-top:10px}
+/* Mobile: the one "Détails" toggle also hides the side panels so the conversation gets the screen. */
+@media(max-width:999px){.detail:has(.hmeta:not([open])) .side{display:none}}
 .ro-note{font-size:13px;color:hsl(var(--foreground));border:1px solid hsl(var(--border));border-radius:var(--radius);padding:12px 14px;margin:0;background:hsl(var(--muted) / .5)}
 
 /* Collapsible / Accordion shadcn */
@@ -276,6 +284,7 @@ body.has-js .filters:not([open]){display:none}
   details.tool>summary{min-height:48px}
   .panel>summary{min-height:44px}
   .detail{display:grid;grid-template-columns:minmax(0,1fr) 320px;grid-template-areas:"head head" "chat side";gap:24px;align-items:start}
+  .hmeta>summary{display:none}.hmeta>summary+*{margin-top:0}
   .dhead{grid-area:head}.chat{grid-area:chat}
   .side{grid-area:side;display:flex;flex-direction:column;gap:12px;position:sticky;top:calc(76px + env(safe-area-inset-top,0px))}
   body.is-detail main{padding-bottom:48px}
@@ -342,8 +351,8 @@ for(const button of document.querySelectorAll('[data-copy]'))button.addEventList
     notify('Copie indisponible : sélectionnez la commande et copiez-la manuellement.');
   }
 });
-const info=document.querySelector('[data-sidebar-info]');
-if(info){const wide=window.matchMedia('(min-width:1000px)');info.open=wide.matches;wide.addEventListener('change',()=>{info.open=wide.matches;});}
+const wide=window.matchMedia('(min-width:1000px)');
+for(const info of document.querySelectorAll('[data-meta]')){info.open=wide.matches;wide.addEventListener('change',()=>{info.open=wide.matches;});}
 const conversation=document.getElementById('conversation');
 if(conversation){
   function sizeConversation(event){
@@ -369,7 +378,7 @@ if(conversation){
   conversation.scrollIntoView({block:'nearest'});
   window.addEventListener('resize',sizeConversation);
   window.visualViewport?.addEventListener('resize',sizeConversation);
-  for(const panel of document.querySelectorAll('.side details'))panel.addEventListener('toggle',sizeConversation);
+  for(const panel of document.querySelectorAll('.side details,.hmeta'))panel.addEventListener('toggle',sizeConversation);
 }
 const filters=document.getElementById('filters');
 const toggle=document.querySelector('[data-filter-toggle]');
