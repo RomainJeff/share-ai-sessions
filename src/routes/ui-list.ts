@@ -34,7 +34,7 @@ export async function sessionListPage(request: Request, env: Env, who: Identity)
   };
   const rows = results.slice(0, 100);
   const active = ["project", "repo", "author", "from", "to"].filter((key) => params.get(key)).length;
-  return page("Sessions partagées", `<div class="list-head"><h1>Sessions partagées</h1>
+  return page("Sessions partagées", `<div class="list-head"><h1>Sessions partagées</h1><a class="barback" href="/projects">Mes projets</a>
     <span class="count">${rows.length}${results.length > 100 ? "+" : ""} session${rows.length === 1 ? "" : "s"} · les plus récentes d’abord</span></div>
     <form method="get" action="/" aria-label="Rechercher et filtrer les sessions">
       <div class="searchrow"><label class="search"><span class="sr">Titre ou résumé</span>${icon("search")}

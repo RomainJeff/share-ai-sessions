@@ -1,6 +1,6 @@
 import { env, SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { ALICE, mintJwt } from "./jwt";
+import { ALICE, BOB, mintJwt } from "./jwt";
 
 const ORIGIN = "https://sessions.example.com";
 async function get(path: string) {
@@ -328,5 +328,78 @@ describe("web reader", () => {
     expect(new TextDecoder().decode(bytes)).toContain("share-session/SKILL.md");
     expect((await SELF.fetch(ORIGIN + "/share-session.skill")).status).toBe(401);
     expect(await (await get("/")).text()).toContain('href="/share-session.skill"');
+  });
+});
+
+
+describe("projects reader", () => {
+  async function project(name = "Projet test") {
+    const slug = `ui-${crypto.randomUUID().slice(0, 8)}`;
+    await env.DB.prepare("INSERT INTO projects VALUES (?, ?, ?, ?)").bind(slug, name, ALICE, Date.now()).run();
+    await env.DB.prepare("INSERT INTO project_members VALUES (?, ?, 'owner', ?, ?)").bind(slug, ALICE, ALICE, Date.now()).run();
+    return slug;
+  }
+
+  it("shows only memberships with roles, live counts and filtered session links", async () => {
+    const id = await seed("Live project session");
+    const expired = await seed("Expired project session");
+    await env.DB.prepare("UPDATE sessions SET last_synced_at = 0 WHERE id = ?").bind(expired).run();
+    // Other tests share the DB and fill "team", so count in a project of our own.
+    const own = await project("Counted project");
+    await env.DB.prepare("UPDATE project_members SET role = 'writer' WHERE project = ?").bind(own).run();
+    await env.DB.prepare("UPDATE sessions SET project = ? WHERE id IN (?, ?)").bind(own, id, expired).run();
+    const hidden = await project("Hidden project");
+    await env.DB.prepare("UPDATE project_members SET email = ? WHERE project = ?").bind(BOB, hidden).run();
+    const response = await get("/projects");
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("Mes projets");
+    expect(html).toContain("writer");
+    expect(html).toContain("1 session<");
+    expect(html).toContain(`href="/?project=${own}"`);
+    expect(html).not.toContain("Hidden project");
+    expect(html).not.toContain(`/projects/${own}/settings`);
+    expect(await (await get("/")).text()).toContain('href="/projects"');
+    expect(await (await get(`/?project=${own}`)).text()).toContain(`/s/${id}`);
+    expect(await (await get(`/?project=${hidden}`)).text()).not.toContain(`/s/${id}`);
+    expect((await SELF.fetch(ORIGIN + "/projects")).status).toBe(401);
+  });
+
+  it.each([null, "writer", "reader"])("hides settings from %s", async (role) => {
+    const slug = await project("Secret project name");
+    await env.DB.prepare("DELETE FROM project_members WHERE project = ?").bind(slug).run();
+    if (role) await env.DB.prepare("INSERT INTO project_members VALUES (?, ?, ?, ?, 0)").bind(slug, ALICE, role, BOB).run();
+    const response = await get(`/projects/${slug}/settings`);
+    expect(response.status).toBe(404);
+    expect(await response.text()).not.toContain("Secret project name");
+  });
+
+  it("gives owners member metadata, role controls and an add form", async () => {
+    const slug = await project();
+    await env.DB.prepare("INSERT INTO project_members VALUES (?, ?, 'reader', ?, 0)").bind(slug, BOB, ALICE).run();
+    const response = await get(`/projects/${slug}/settings`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-security-policy")).toContain("connect-src 'self'");
+    const html = await response.text();
+    for (const text of [ALICE, BOB, "Ajouté par", "Ajouté le", "Ajouter un membre", "Enregistrer", "Retirer"]) expect(html).toContain(text);
+    for (const role of ["owner", "writer", "reader"]) expect(html).toContain(`value="${role}"`);
+    expect(html).toContain('type="email"');
+    expect(html).toContain('role="alert"');
+    expect(html).not.toContain('method="post"');
+    expect(await (await get("/projects")).text()).toContain(`/projects/${slug}/settings`);
+    expect((await get('/projects/missing/settings')).status).toBe(404);
+    expect((await SELF.fetch(ORIGIN + `/projects/${slug}/settings`)).status).toBe(401);
+  });
+
+  it("escapes hostile project names, member emails and added_by values", async () => {
+    const attack = '\"><img src=x onerror=alert(1)>';
+    const slug = await project(attack);
+    await env.DB.prepare("INSERT INTO project_members VALUES (?, ?, 'reader', ?, 0)").bind(slug, attack + '@example.com', attack).run();
+    for (const path of ["/projects", `/projects/${slug}/settings`]) {
+      const html = await (await get(path)).text();
+      expect(html).toContain('&quot;&gt;&lt;img src=x onerror=alert(1)&gt;');
+      expect(html).not.toContain('<img');
+      expect(html.match(/<script /g)).toHaveLength(1);
+    }
   });
 });

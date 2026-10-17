@@ -102,7 +102,7 @@ Sync publishes complete lines and waits for an unfinished final line. It reads t
 
 ## Browser reader
 
-Open the configured app URL in the browser to filter sessions of your projects by project, repo, author, UTC update period, or title/summary. Open `/s/<id>` to read the whole conversation in a scrollable container opened at the latest messages, with collapsed tools and token usage deduplicated by `message.id`. Transcript content is displayed as text.
+Open the configured app URL in the browser to filter sessions of your projects by project, repo, author, UTC update period, or title/summary. Open `/s/<id>` to read the whole conversation in a scrollable container opened at the latest messages, with collapsed tools and token usage deduplicated by `message.id`. Transcript content is displayed as text. Open **Mes projets** (`/projects`) to see your roles and live session counts, then open a project’s sessions or, as an owner, its settings (`/projects/<slug>/settings`) to add members, change roles, or remove members. Membership changes use the existing JSON API and display its errors.
 
 The **Reprendre** button copies `/share-session pull <id>` for use in Claude Code. The pull command is delivered by T05; the reader only copies the instruction.
 

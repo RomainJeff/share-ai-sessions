@@ -1,6 +1,7 @@
 import { identify, type Identity } from "./auth";
 import { createSession } from "./routes/sessions-create";
 import { listSessions } from "./routes/sessions-list";
+import { projectsPage, projectSettingsPage } from "./routes/ui-projects";
 import { sessionListPage } from "./routes/ui-list";
 import { sessionDetailPage } from "./routes/ui-detail";
 
@@ -27,6 +28,8 @@ const ROUTES: [method: string, pattern: URLPattern, handler: Handler][] = [
   ["GET", new URLPattern({ pathname: "/api/projects/:slug" }), getProject],
   ["POST", new URLPattern({ pathname: "/api/projects" }), createProject],
   ["GET", new URLPattern({ pathname: "/api/projects" }), listProjects],
+  ["GET", new URLPattern({ pathname: "/projects" }), projectsPage],
+  ["GET", new URLPattern({ pathname: "/projects/:slug/settings" }), projectSettingsPage],
   ["GET", new URLPattern({ pathname: "/" }), sessionListPage],
   ["GET", new URLPattern({ pathname: "/s/:id" }), sessionDetailPage],
   ["GET", new URLPattern({ pathname: "/share-session.skill" }), skillDownload],

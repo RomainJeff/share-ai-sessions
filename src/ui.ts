@@ -107,6 +107,15 @@ body.is-detail main{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))
 .card .foot{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-top:1px solid hsl(var(--border));padding-top:12px}
 .empty{padding:40px 16px;text-align:center;color:hsl(var(--muted-foreground));grid-column:1/-1;border:1px dashed hsl(var(--border));border-radius:var(--radius)}
 
+.project-card{cursor:default;overflow-wrap:anywhere}
+.project-card .ttl a{text-decoration:underline;text-underline-offset:3px}
+.project-settings{display:grid;gap:16px}
+.project-settings form{display:grid;gap:12px}
+.project-settings dd{margin:0;overflow-wrap:anywhere}
+.project-settings .f{display:grid;gap:6px}
+.project-settings [role=alert]{color:hsl(var(--destructive-text));overflow-wrap:anywhere}
+.btn:disabled{opacity:.5;cursor:wait}
+
 /* Badge shadcn : secondary (tags) / outline (statuts, projet, fork) */
 .chip,.badge{font-size:12px;font-weight:500;line-height:18px;padding:1px 8px;border-radius:calc(var(--radius) - 2px);display:inline-flex;gap:6px;align-items:center;max-width:100%;white-space:nowrap}
 .chip{background:hsl(var(--secondary));color:hsl(var(--secondary-foreground));border:1px solid transparent}
@@ -380,6 +389,29 @@ if(conversation){
   window.visualViewport?.addEventListener('resize',sizeConversation);
   for(const panel of document.querySelectorAll('.side details,.hmeta'))panel.addEventListener('toggle',sizeConversation);
 }
+const projectSettings=document.querySelector('[data-project]');
+if(projectSettings){
+  const error=projectSettings.querySelector('[data-project-error]');
+  async function saveMember(form,method){
+    const buttons=projectSettings.querySelectorAll('button');
+    for(const button of buttons)button.disabled=true;
+    error.hidden=true;
+    try{
+      const email=form.dataset.email??form.elements.email.value.trim();
+      const response=await fetch('/api/projects/'+encodeURIComponent(projectSettings.dataset.project)+'/members/'+encodeURIComponent(email),{
+        method,headers:{'Content-Type':'application/json'},body:JSON.stringify(method==='PUT'?{role:form.elements.role.value}:{})
+      });
+      if(!response.ok){const result=await response.json();throw new Error(result.error||'Erreur lors de la modification.');}
+      window.location.reload();
+    }catch(reason){error.textContent=reason instanceof Error?reason.message:'Modification impossible. Réessayez.';error.hidden=false;}
+    finally{for(const button of buttons)button.disabled=false;}
+  }
+  for(const form of projectSettings.querySelectorAll('[data-project-member]')){
+    for(const button of form.querySelectorAll('button'))button.disabled=false;
+    form.addEventListener('submit',event=>{event.preventDefault();saveMember(form,'PUT');});
+    form.querySelector('[data-remove]')?.addEventListener('click',()=>saveMember(form,'DELETE'));
+  }
+}
 const filters=document.getElementById('filters');
 const toggle=document.querySelector('[data-filter-toggle]');
 if(filters&&toggle&&typeof filters.showModal==='function'){
@@ -395,7 +427,7 @@ if(filters&&toggle&&typeof filters.showModal==='function'){
 </script></body></html>`, { status, headers: {
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": "private, no-store",
-    "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
+    "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
     "X-Content-Type-Options": "nosniff",
   } });
 }
