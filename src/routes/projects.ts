@@ -1,5 +1,6 @@
 import type { Identity } from "../auth";
-import { atLeast, roleIn, ROLES, SLUG, VISIBLE, visibleSince, type Role } from "../db";
+import { atLeast, roleIn, ROLES, SLUG, type Role } from "../db";
+import { getProjectSummaries } from "../navigation";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const fail = (error: string, status: number) => Response.json({ error }, { status });
@@ -17,13 +18,7 @@ async function body(request: Request): Promise<Record<string, unknown> | null> {
 
 /** GET /api/projects — the caller's projects, with their role and live session count. */
 export async function listProjects(_request: Request, env: Env, who: Identity): Promise<Response> {
-  const { results } = await env.DB.prepare(
-    `SELECT p.slug, p.name, p.created_by, p.created_at, m.role,
-       (SELECT COUNT(*) FROM project_members WHERE project = p.slug) AS members,
-       (SELECT COUNT(*) FROM sessions WHERE project = p.slug AND ${VISIBLE}) AS sessions
-     FROM projects p JOIN project_members m ON m.project = p.slug AND m.email = lower(?) ORDER BY p.slug`,
-  ).bind(visibleSince(), who.email).all();
-  return Response.json({ projects: results });
+  return Response.json({ projects: await getProjectSummaries(env, who.email) });
 }
 
 /** POST /api/projects {slug, name?} — the creator becomes its first owner. */

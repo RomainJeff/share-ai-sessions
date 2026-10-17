@@ -21,7 +21,7 @@ export async function listSessions(request: Request, env: Env, who: Identity): P
 
   // ponytail: fixed page of 100, add a cursor when someone has more than 100 live sessions.
   const { results } = await env.DB.prepare(
-    `SELECT ${COLUMNS} FROM sessions WHERE ${where.join(" AND ")} ORDER BY updated_at DESC LIMIT 100`,
+    `SELECT ${COLUMNS} FROM sessions WHERE ${where.join(" AND ")} ORDER BY last_synced_at DESC, id LIMIT 100`,
   )
     .bind(...binds)
     .all();

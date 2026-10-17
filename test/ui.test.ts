@@ -144,28 +144,31 @@ describe("web reader", () => {
 
   it("keeps sharing instructions behind a disclosure and the download reachable without JavaScript", async () => {
     const html = await (await get("/")).text();
-    const help = html.match(/<details class="panel share-help">([^]*?)<\/details>/)?.[1];
+    const help = html.match(/<details class="panel share-help"[^>]*>([^]*?)<\/details>/)?.[1];
     expect(help).toBeDefined();
     expect(help).toContain("Partager une session");
     expect(help).toContain('class="btn" href="/share-session.skill" download');
-    expect(html).toContain('id="filters" aria-labelledby="filters-title" open');
+    expect(html).toContain('href="/sessions"');
   });
 
   it("filters title/summary, project, author and inclusive UTC period, newest first", async () => {
     const older = await seed("Older hit");
     const newer = await seed("Newer hit");
     const other = await seed("Other hit", [], "else/repo");
-    await env.DB.prepare("UPDATE sessions SET updated_at = ?, summary = ? WHERE id = ?").bind(Date.parse("2026-06-01T23:59:59Z"), "needle", older).run();
-    await env.DB.prepare("UPDATE sessions SET updated_at = ?, summary = ? WHERE id = ?").bind(Date.parse("2026-06-02T12:00:00Z"), "needle", newer).run();
-    const html = await (await get(`/?repo=acme/repo&author=${ALICE}&q=needle&from=2026-06-01&to=2026-06-02`)).text();
+    const today = new Date().toISOString().slice(0, 10);
+    const firstDay = new Date(Date.parse(today) - 2 * 86400000).toISOString().slice(0, 10);
+    const secondDay = new Date(Date.parse(today) - 86400000).toISOString().slice(0, 10);
+    await env.DB.prepare("UPDATE sessions SET last_synced_at = ?, summary = ? WHERE id = ?").bind(Date.parse(`${firstDay}T23:59:59Z`), "needle", older).run();
+    await env.DB.prepare("UPDATE sessions SET last_synced_at = ?, summary = ? WHERE id = ?").bind(Date.parse(`${secondDay}T12:00:00Z`), "needle", newer).run();
+    const html = await (await get(`/sessions?repo=acme/repo&author=${ALICE}&q=needle&from=${firstDay}&to=${secondDay}`)).text();
     expect(html).toContain(`/s/${older}`);
     expect(html.indexOf("Newer hit")).toBeLessThan(html.indexOf("Older hit"));
     expect(html).not.toContain(`/s/${other}`);
-    expect(await (await get("/?from=2026-06-01&to=2026-06-01&q=Older")).text()).toContain(`/s/${older}`);
-    expect(await (await get("/?q=Newer&to=2026-06-01")).text()).not.toContain(`/s/${newer}`);
-    expect(await (await get("/?author=other@example.com")).text()).not.toContain(`/s/${newer}`);
-    expect(await (await get("/?q=Older")).text()).toContain(`/s/${older}`);
-    expect((await get("/?from=2026-02-31")).status).toBe(400);
+    expect(await (await get(`/sessions?from=${firstDay}&to=${firstDay}&q=Older`)).text()).toContain(`/s/${older}`);
+    expect(await (await get(`/sessions?q=Newer&to=${firstDay}`)).text()).not.toContain(`/s/${newer}`);
+    expect(await (await get("/sessions?author=other@example.com")).text()).not.toContain(`/s/${newer}`);
+    expect(await (await get("/sessions?q=Older")).text()).toContain(`/s/${older}`);
+    expect((await get("/sessions?from=2026-02-31")).status).toBe(400);
   });
 
   it("shows metadata, deduplicated tokens, collapsed tools and every conversation row", async () => {
@@ -286,15 +289,15 @@ describe("web reader", () => {
     await env.DB.batch(Array.from({ length: 100 }, (_, n) => env.DB.prepare(`INSERT INTO sessions
       (id, owner_email, owner_name, project, repo, title, created_at, updated_at, last_synced_at)
       VALUES (?, ?, 'Alice', 'team', 'paging/repo', ?, ?, ?, ?)`).bind(
-      crypto.randomUUID(), ALICE, `Pagination ${n}`, Date.now(), Date.now() + n + 1, Date.now())));
+      crypto.randomUUID(), ALICE, `Pagination ${n}`, Date.now(), Date.now() + n + 1, Date.now() + n + 1)));
     const query = `repo=paging%2Frepo&author=${encodeURIComponent(ALICE)}&q=Pagination`;
-    const first = await (await get(`/?${query}`)).text();
-    expect(first.match(/<a class="card" /g)).toHaveLength(100);
-    expect(first).toContain(`href="/?${query.replaceAll("&", "&amp;")}&amp;page=2"`);
-    const second = await (await get(`/?${query}&page=2`)).text();
-    expect(second.match(/<a class="card" /g)).toHaveLength(1);
+    const first = await (await get(`/sessions?${query}`)).text();
+    expect(first.match(/<article class="session-row"/g)).toHaveLength(100);
+    expect(first).toContain(`href="/sessions?${query.replaceAll("&", "&amp;")}&amp;page=2"`);
+    const second = await (await get(`/sessions?${query}&page=2`)).text();
+    expect(second.match(/<article class="session-row"/g)).toHaveLength(1);
     expect(second).toContain(`/s/${id}`);
-    const hostile = await (await get('/?q=%22%3E%3Cscript%3Ealert(1)%3C%2Fscript%3E')).text();
+    const hostile = await (await get('/sessions?q=%22%3E%3Cscript%3Ealert(1)%3C%2Fscript%3E')).text();
     expect(hostile).toContain('value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"');
     expect(hostile).not.toContain('<script>alert(1)</script>');
   });
@@ -353,15 +356,15 @@ describe("projects reader", () => {
     const response = await get("/projects");
     expect(response.status).toBe(200);
     const html = await response.text();
-    expect(html).toContain("Mes projets");
-    expect(html).toContain("writer");
-    expect(html).toContain("1 session<");
-    expect(html).toContain(`href="/?project=${own}"`);
+    expect(html).toContain("Projets");
+    expect(html).toContain("Écriture");
+    expect(html.replace(/<[^>]*>/g, "")).toContain("1 session");
+    expect(html).toContain(`href="/projects/${own}"`);
     expect(html).not.toContain("Hidden project");
     expect(html).not.toContain(`/projects/${own}/settings`);
     expect(await (await get("/")).text()).toContain('href="/projects"');
-    expect(await (await get(`/?project=${own}`)).text()).toContain(`/s/${id}`);
-    expect(await (await get(`/?project=${hidden}`)).text()).not.toContain(`/s/${id}`);
+    expect(await (await get(`/projects/${own}`)).text()).toContain(`/s/${id}`);
+    expect(await (await get(`/projects/${hidden}`)).text()).not.toContain(`/s/${id}`);
     expect((await SELF.fetch(ORIGIN + "/projects")).status).toBe(401);
   });
 
@@ -386,7 +389,7 @@ describe("projects reader", () => {
     expect(html).toContain('type="email"');
     expect(html).toContain('role="alert"');
     expect(html).not.toContain('method="post"');
-    expect(await (await get("/projects")).text()).toContain(`/projects/${slug}/settings`);
+    expect(await (await get(`/projects/${slug}`)).text()).toContain(`/projects/${slug}/settings`);
     expect((await get('/projects/missing/settings')).status).toBe(404);
     expect((await SELF.fetch(ORIGIN + `/projects/${slug}/settings`)).status).toBe(401);
   });

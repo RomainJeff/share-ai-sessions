@@ -1,5 +1,6 @@
 import type { Identity } from "../auth";
 import { atLeast, MEMBER, roleIn, VISIBLE, visibleSince } from "../db";
+import { getProjectSummaries } from "../navigation";
 import { author, dateLabel, escapeHtml as e, icon, page } from "../ui";
 
 type RecordLine = { type?: string; timestamp?: string; isMeta?: boolean; isCompactSummary?: boolean; toolUseResult?: unknown; message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, number> } };
@@ -60,6 +61,22 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
   const session = await env.DB.prepare(`SELECT * FROM sessions WHERE id = ? AND ${VISIBLE} AND ${MEMBER}`)
     .bind(id, visibleSince(), who.email).first<Record<string, string | number | null>>();
   if (!session) return page("Session introuvable", "<h1>Session introuvable</h1>", 404);
+  const projects = await getProjectSummaries(env, who.email);
+  const project = projects.find(p => p.slug === session.project)!;
+  const projectHref = `/projects/${encodeURIComponent(String(session.project))}`;
+  let backHref = projectHref;
+  const returnTo = new URL(request.url).searchParams.get("return");
+  if (returnTo?.startsWith("/") && !returnTo.startsWith("//")) {
+    const origin = new URL(request.url).origin;
+    try {
+      const target = new URL(returnTo, origin);
+      // Return only to a membership-filtered list or this session's own project.
+      if (target.origin === origin && (target.pathname === "/sessions" || target.pathname === projectHref)) {
+        backHref = target.pathname + target.search;
+      }
+    } catch { /* Fall back to the session's current project for malformed links. */ }
+  }
+
   const continuation = await env.DB.prepare(`SELECT id FROM sessions WHERE continued_from = ? AND ${VISIBLE} AND ${MEMBER} ORDER BY created_at DESC LIMIT 1`)
     .bind(id, visibleSince(), who.email).first<{ id: string }>();
 
@@ -168,5 +185,13 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
     <section class="chat transcript" id="conversation" tabindex="0" aria-label="Conversation"><h2 class="chat-title">Conversation</h2>
       ${invalid ? `<p class="ro-note">${invalid} ligne(s) JSONL invalide(s) ignorée(s).</p>` : ""}
       ${conversation || '<p class="empty">Aucun message.</p>'}
-    </section></div>`, 200, true);
+    </section></div>`, 200, true, {
+      active: "projects", projects, email: who.email, backHref,
+      backLabel: backHref.startsWith("/sessions") ? "Toutes les sessions" : project?.name || String(session.project),
+      breadcrumbs: [
+        { label: "Accueil", href: "/" }, { label: "Projets", href: "/projects" },
+        { label: project?.name || String(session.project), href: backHref.startsWith(projectHref) ? backHref : projectHref },
+        { label: String(session.title || id) },
+      ],
+    });
 }

@@ -2,7 +2,8 @@ import { identify, type Identity } from "./auth";
 import { createSession } from "./routes/sessions-create";
 import { listSessions } from "./routes/sessions-list";
 import { projectsPage, projectSettingsPage } from "./routes/ui-projects";
-import { sessionListPage } from "./routes/ui-list";
+import { sessionListPage, projectSessionsPage } from "./routes/ui-list";
+import { homePage } from "./routes/ui-home";
 import { sessionDetailPage } from "./routes/ui-detail";
 
 import { moveSession } from "./routes/sessions-project";
@@ -16,6 +17,21 @@ import { BROKER_ISSUER, brokerInScope } from "./broker";
 import { handleMcpHost } from "./routes/mcp";
 
 type Handler = (request: Request, env: Env, who: Identity, params: Record<string, string>) => Promise<Response>;
+
+// Preserve bookmarks from the former homepage-as-session-list while making / a real overview.
+const legacyFilters = ["project", "repo", "author", "mine", "q", "from", "to", "page", "sort"];
+function legacyListRedirect(request: Request): Response | null {
+  const url = new URL(request.url);
+  if (url.pathname === "/" && !legacyFilters.some(key => url.searchParams.has(key))) return null;
+  const project = url.searchParams.get("project");
+  if (url.pathname === "/sessions" && !project) return null;
+  const path = project ? `/projects/${encodeURIComponent(project.toLowerCase())}` : "/sessions";
+  url.searchParams.delete("project");
+  const query = url.searchParams.toString();
+  return new Response(null, { status: 302, headers: { Location: path + (query ? `?${query}` : ""), "Cache-Control": "private, no-store" } });
+}
+const landingPage: Handler = (request, env, who) => Promise.resolve(legacyListRedirect(request) ?? homePage(request, env, who));
+const allSessionsPage: Handler = (request, env, who) => Promise.resolve(legacyListRedirect(request) ?? sessionListPage(request, env, who));
 
 // One line per route; each handler lives in its own file under routes/.
 const ROUTES: [method: string, pattern: URLPattern, handler: Handler][] = [
@@ -32,7 +48,9 @@ const ROUTES: [method: string, pattern: URLPattern, handler: Handler][] = [
   ["GET", new URLPattern({ pathname: "/api/projects" }), listProjects],
   ["GET", new URLPattern({ pathname: "/projects" }), projectsPage],
   ["GET", new URLPattern({ pathname: "/projects/:slug/settings" }), projectSettingsPage],
-  ["GET", new URLPattern({ pathname: "/" }), sessionListPage],
+  ["GET", new URLPattern({ pathname: "/projects/:slug" }), projectSessionsPage],
+  ["GET", new URLPattern({ pathname: "/sessions" }), allSessionsPage],
+  ["GET", new URLPattern({ pathname: "/" }), landingPage],
   ["GET", new URLPattern({ pathname: "/s/:id" }), sessionDetailPage],
   ["GET", new URLPattern({ pathname: "/share-session.skill" }), skillDownload],
 ];

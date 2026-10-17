@@ -1,3 +1,14 @@
+import type { ProjectSummary } from "./navigation";
+
+export type NavigationOptions = {
+  active: "home" | "projects" | "sessions";
+  projects: ProjectSummary[];
+  breadcrumbs: { label: string; href?: string }[];
+  email?: string;
+  backHref?: string;
+  backLabel?: string;
+};
+
 /** All transcript and metadata values enter HTML through this text/attribute escape. */
 export const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -302,8 +313,234 @@ body.has-js .filters:not([open]){display:none}
   .actionbar .in{margin:0;max-width:none}
   .actionbar .btn.primary{flex:none;padding:0 18px}
 }
-@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+/* Approved navigation shell. Scoped tokens leave standalone/error pages compatible. */
+body.has-navigation{
+  --nav-side:#f7f7f9;--nav-soft:#f5f5f7;--nav-ink:#212126;--nav-muted:#71717c;
+  --nav-line:#e9e9ee;--nav-hover:#fafafd;--nav-accent:#6e56b5;--nav-accent-soft:#f0ecfa;--nav-good:#368066;
+  --foreground:240 7% 14%;--muted-foreground:240 5% 47%;--border:240 14% 92%;
+  --f-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mobile-nav-height:calc(65px + env(safe-area-inset-bottom,0px));color:var(--nav-ink)
+}
+@media(prefers-color-scheme:dark){body.has-navigation{
+  --background:240 6% 10%;--card:240 6% 10%;--foreground:240 9% 94%;--muted:240 5% 15%;
+  --muted-foreground:240 6% 68%;--border:240 6% 20%;--input:240 6% 20%;
+  --nav-side:#141417;--nav-soft:#252529;--nav-ink:#ededf0;--nav-muted:#aaaab5;
+  --nav-line:#303036;--nav-hover:#222226;--nav-accent:#b7a1ef;--nav-accent-soft:#30283f;--nav-good:#7dbea5
+}}
+.has-navigation .shell{min-height:100dvh;display:grid;grid-template-columns:226px minmax(0,1fr)}
+.has-navigation .sidebar{position:sticky;top:0;height:100dvh;overflow-y:auto;background:var(--nav-side);border-right:1px solid var(--nav-line);padding:25px 15px 16px;display:flex;flex-direction:column}
+.has-navigation .sidebar .brand{display:flex;gap:11px;padding:0 10px;margin-bottom:30px;font-size:16px;font-weight:650;letter-spacing:-.4px}
+.has-navigation .brand-icon{height:29px;width:29px;border:1px solid var(--nav-line);border-radius:9px;background:hsl(var(--background));display:grid;place-items:center}
+.has-navigation .brand-icon svg{width:17px}
+.has-navigation .nav{display:grid;gap:5px}
+.has-navigation .nav a{padding:10px 11px;border-radius:7px;display:flex;gap:11px;align-items:center;color:var(--nav-muted);font-weight:500;font-size:13px;min-height:44px}
+.has-navigation .nav a:hover{background:var(--nav-soft);color:var(--nav-ink)}
+.has-navigation .nav a[aria-current=page]{background:var(--nav-accent-soft);color:var(--nav-accent)}
+.has-navigation .side-section{margin-top:31px}
+.has-navigation .side-label{display:flex;align-items:center;justify-content:space-between;margin:0 10px 9px;font-size:11px;color:var(--nav-muted);font-weight:550}
+.has-navigation .side-label a{padding:6px 0}
+.has-navigation .side-project{display:flex;align-items:center;gap:10px;border-radius:7px;padding:9px 11px;min-height:44px;font-size:13px;min-width:0}
+.has-navigation .side-project:hover,.has-navigation .side-project.selected{background:var(--nav-soft)}
+.has-navigation .side-project .project-name{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.has-navigation .side-project .count{margin-left:auto;font-size:11px}
+.has-navigation .project-dot{height:8px;width:8px;border-radius:3px;flex:none;background:var(--tone,var(--nav-accent))}
+.has-navigation .violet{--tone:#8470bc;--tint:#f1edf9}.has-navigation .blue{--tone:#5987aa;--tint:#edf4f9}.has-navigation .green{--tone:#518c72;--tint:#edf5f0}.has-navigation .amber{--tone:#a58c55;--tint:#f8f4eb}.has-navigation .gray{--tone:#8d8d98;--tint:#f1f1f4}
+.has-navigation .sidebar-bottom{margin-top:auto;padding-top:35px}
+.has-navigation .help-link{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--nav-muted);padding:10px;min-height:44px}
+.has-navigation .profile{display:flex;align-items:center;gap:9px;margin-top:13px;padding:14px 9px 0;border-top:1px solid var(--nav-line);min-width:0}
+.has-navigation .profile small{font-size:11px;display:block;color:var(--nav-muted);overflow-wrap:anywhere}
+.has-navigation .shell-main{min-width:0}
+.has-navigation .topbar{min-height:71px;padding:8px 42px;border-bottom:1px solid var(--nav-line);display:flex;align-items:center;gap:20px;position:sticky;top:0;z-index:6;background:hsl(var(--background) / .97);backdrop-filter:blur(8px)}
+.has-navigation .crumb{display:flex;align-items:center;gap:9px;color:var(--nav-muted);font-size:12px;min-width:0}
+.has-navigation .crumb span:last-child{color:var(--nav-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.has-navigation .crumb a{flex:none;min-height:44px;display:flex;align-items:center}
+.has-navigation .crumb a:hover{color:var(--nav-accent)}
+.has-navigation .crumb .i{width:12px;height:12px;transform:rotate(180deg)}
+.has-navigation .global-search{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--nav-muted);min-width:220px;max-width:320px}
+.has-navigation .global-search input{background:none;border:0;min-width:0;width:100%;font-size:12px;padding:10px 4px;min-height:40px}
+.has-navigation .global-search button{border:0;background:none;padding:8px;display:grid;place-items:center;min-height:44px;min-width:44px}
+.has-navigation .mobile-brand,.has-navigation .mobile-nav{display:none}
+.has-navigation .content{width:100%;max-width:1220px;margin:0 auto;padding:39px 42px 68px;min-width:0}
+.has-navigation .pagehead{display:flex;align-items:flex-start;gap:20px;margin-bottom:31px}
+.has-navigation .pagehead h1{font-size:28px;font-weight:620;line-height:1.2;letter-spacing:-.85px}
+.has-navigation .pagehead p{color:var(--nav-muted);font-size:13px;margin:8px 0 0}
+.has-navigation .pagehead .btn{margin-left:auto}
+.has-navigation .btn{min-height:36px;padding:7px 12px;font-size:12px;border-radius:7px;box-shadow:none}
+.has-navigation .section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}
+.has-navigation .section-head h2{font-size:15px;letter-spacing:-.25px;font-weight:600;display:flex;align-items:center;gap:9px}
+.has-navigation .section-head .sub{font-size:11px;color:var(--nav-muted);font-weight:400}
+.has-navigation .textlink{color:var(--nav-muted);font-size:12px;display:inline-flex;align-items:center;gap:4px;min-height:36px}
+.has-navigation .textlink:hover{color:var(--nav-accent)}
+.has-navigation .session-list{border:1px solid var(--nav-line);border-radius:12px;overflow:hidden}
+.has-navigation .session-row{display:grid;grid-template-columns:minmax(0,1fr) 150px 130px 86px;gap:18px;align-items:center;min-height:74px;padding:15px 19px;border-top:1px solid var(--nav-line);position:relative;transition:background .12s}
+.has-navigation .session-row:first-child{border-top:0}.has-navigation .session-row:hover{background:var(--nav-hover)}
+.has-navigation .session-row>div:first-child{min-width:0}
+.has-navigation .session-title{font-weight:530;font-size:13px;letter-spacing:-.12px;display:block;line-height:1.4;overflow-wrap:anywhere}
+.has-navigation .session-title:after{content:"";position:absolute;inset:0;z-index:1}
+.has-navigation .session-title:hover{color:var(--nav-accent)}
+.has-navigation .session-note{margin:5px 0 0;color:var(--nav-muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65ch}
+.has-navigation .project-chip{position:relative;z-index:2;justify-self:start;display:inline-flex;align-items:center;gap:6px;font-size:11px;border:1px solid var(--nav-line);border-radius:5px;padding:3px 7px;max-width:100%;background:hsl(var(--background));overflow-wrap:anywhere}
+.has-navigation .project-chip:hover{border-color:var(--tone,var(--nav-accent));color:var(--nav-accent)}
+.has-navigation .list-author,.has-navigation .list-author .author{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--nav-muted);min-width:0}
+.has-navigation .list-author>span:last-child,.has-navigation .list-author .author>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.has-navigation .list-author .avatar{width:23px;height:23px;font-size:8px}
+.has-navigation .when{font-size:11px;text-align:right;color:var(--nav-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.has-navigation .home-projects{margin-top:34px}
+.has-navigation .project-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.has-navigation .project-card{padding:20px;border:1px solid var(--nav-line);border-radius:12px;position:relative;display:flex;flex-direction:column;min-height:166px;min-width:0;gap:0;box-shadow:none}
+.has-navigation .project-card:hover{border-color:var(--tone,var(--nav-accent));background:var(--nav-hover)}
+.has-navigation .project-settings .project-card{gap:12px;min-height:0}
+.has-navigation .project-top{display:flex;align-items:center;gap:11px;min-width:0}
+.has-navigation .folder-icon{width:33px;height:33px;border-radius:8px;background:var(--tint,var(--nav-accent-soft));color:var(--tone,var(--nav-accent));display:grid;place-items:center;flex:none}
+.has-navigation .project-card h3{font-size:14px;letter-spacing:-.2px;font-weight:580;min-width:0;overflow-wrap:anywhere}
+.has-navigation .project-card h3 a:after,.has-navigation .project-cell h3 a:after{content:"";position:absolute;inset:0;z-index:1}
+.has-navigation .role{font-size:10px;color:var(--nav-muted);background:var(--nav-soft);padding:3px 7px;border-radius:4px;white-space:nowrap}
+.has-navigation .project-top .role{margin-left:auto}
+.has-navigation .project-description{font-size:12px;color:var(--nav-muted);margin:13px 0 0}
+.has-navigation .project-card-bottom{display:flex;align-items:center;gap:15px;margin-top:auto;padding-top:20px;font-size:11px;color:var(--nav-muted)}
+.has-navigation .project-card-bottom b{color:var(--nav-ink);font-weight:550}
+.has-navigation .project-card-bottom .activity{margin-left:auto}
+.has-navigation .last-session{padding-top:11px;border-top:1px solid var(--nav-line);margin-top:14px;display:flex;align-items:center;gap:7px;font-size:11px;color:var(--nav-muted);white-space:nowrap;overflow:hidden}
+.has-navigation .last-session span{overflow:hidden;text-overflow:ellipsis}.has-navigation .last-session svg{width:13px;height:13px}
+.has-navigation .footnote{font-size:11px;color:var(--nav-muted);display:flex;gap:7px;align-items:flex-start;margin-top:18px}
+.has-navigation .footnote svg{width:13px;height:13px;flex:none;margin-top:2px}
+.has-navigation .toolbar{display:flex;align-items:center;gap:10px;margin-bottom:19px;flex-wrap:wrap}
+.has-navigation .searchbox{display:flex;align-items:center;gap:8px;background:hsl(var(--background));border:1px solid var(--nav-line);border-radius:7px;padding:0 11px;min-height:38px;max-width:330px;flex:1;min-width:170px}
+.has-navigation .searchbox svg{width:15px;color:var(--nav-muted)}
+.has-navigation .searchbox input{width:100%;min-width:0;border:0;background:none;font-size:12px;padding:9px 0}
+.has-navigation .searchbox:focus-within{outline:2px solid var(--nav-accent);outline-offset:2px}
+.has-navigation .searchbox input:focus-visible{outline:0}
+.has-navigation .toolbar select{border:1px solid var(--nav-line);border-radius:7px;background:hsl(var(--background));padding:8px 27px 8px 10px;font-size:12px;min-height:38px;max-width:210px}
+.has-navigation .toolbar .sort{margin-left:auto}
+.has-navigation .segmented{display:flex;background:var(--nav-soft);padding:3px;border-radius:7px;gap:2px}
+.has-navigation .segmented :is(button,a){font-size:11px;padding:6px 10px;min-height:32px;border:0;background:none;border-radius:5px;color:var(--nav-muted);display:flex;align-items:center}
+.has-navigation .segmented .active{background:hsl(var(--background));color:var(--nav-ink);box-shadow:0 1px 3px #00000010}
+.has-navigation .projects-table{border:1px solid var(--nav-line);border-radius:12px;overflow:hidden}
+.has-navigation .project-table-head,.has-navigation .project-table-row{display:grid;grid-template-columns:minmax(0,1fr) 82px 88px 107px 88px;gap:18px;align-items:center;padding:14px 20px}
+.has-navigation .project-table-head{font-size:10px;color:var(--nav-muted);background:var(--nav-hover)}
+.has-navigation .project-table-row{position:relative;min-height:91px;border-top:1px solid var(--nav-line);font-size:12px}
+.has-navigation .project-table-row:hover{background:var(--nav-hover)}
+.has-navigation .project-cell{display:flex;align-items:center;gap:13px;min-width:0}
+.has-navigation .project-cell h3{font-size:13px;font-weight:550;letter-spacing:-.12px;overflow-wrap:anywhere}
+.has-navigation .project-cell p{font-size:11px;color:var(--nav-muted);margin:4px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:380px}
+.has-navigation .project-cell>div:last-child{min-width:0}
+.has-navigation .number{font-variant-numeric:tabular-nums}.has-navigation .mobile-count{display:none}.has-navigation .project-table-row .when{text-align:left}
+.has-navigation .projecthead{margin-bottom:26px}
+.has-navigation .project-title{display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+.has-navigation .project-title .folder-icon{width:44px;height:44px;border-radius:11px}
+.has-navigation .project-title h1{font-size:30px;overflow-wrap:anywhere}
+.has-navigation .project-info{display:flex;gap:17px;flex-wrap:wrap;color:var(--nav-muted);font-size:12px;margin:17px 0 0;align-items:center}
+.has-navigation .project-info span{display:flex;align-items:center;gap:6px}
+.has-navigation .project-tabs{display:flex;gap:27px;border-bottom:1px solid var(--nav-line);margin-bottom:24px}
+.has-navigation .project-tabs :is(button,a,summary){font-size:12px;min-height:44px;padding:0 1px;color:var(--nav-muted);position:relative;display:flex;align-items:center;gap:6px}
+.has-navigation .project-tabs .active{color:var(--nav-ink);font-weight:550}
+.has-navigation .project-tabs .active:after{content:"";height:2px;background:var(--nav-ink);position:absolute;bottom:-1px;left:0;right:0}
+.has-navigation .group-title{color:var(--nav-muted);font-size:11px;font-weight:500;margin:24px 0 9px}
+.has-navigation .project-sessions.in-project .session-row{grid-template-columns:minmax(0,1fr) 137px 67px 90px;min-height:86px}
+.has-navigation .project-sessions .session-note{max-width:68ch}
+.has-navigation .msg-count{font-size:11px;color:var(--nav-muted);text-align:right;white-space:nowrap}
+.has-navigation .result-count{font-size:11px;color:var(--nav-muted);margin-bottom:8px}
+.has-navigation .empty{border:1px dashed var(--nav-line);border-radius:12px;padding:55px 25px;text-align:center;display:grid;justify-items:center;gap:10px}
+.has-navigation .empty h2{font-size:16px;font-weight:550;color:var(--nav-ink)}
+.has-navigation .empty p{max-width:390px;font-size:12px;color:var(--nav-muted);margin:0}
+.has-navigation .empty .btn{margin-top:7px}
+.has-navigation .installation{margin-top:32px;border-top:1px solid var(--nav-line);padding-top:16px;color:var(--nav-muted);font-size:12px;scroll-margin-top:90px}
+.has-navigation .installation .share-help{scroll-margin-top:90px;box-shadow:none;margin-bottom:0}
+.has-navigation .installation summary{cursor:pointer;min-height:44px;display:flex;gap:8px;align-items:center;list-style:none}
+.has-navigation .installation .pb{display:grid;justify-items:start;gap:10px;padding:12px 16px;max-width:72ch}
+.has-navigation .installation p{margin:0}.has-navigation .installation code{font-family:var(--f-mono)}
+.has-navigation .skip-link{position:fixed;left:16px;top:-100px;z-index:30;padding:10px 16px;background:hsl(var(--background));border:2px solid var(--nav-accent);border-radius:7px}
+.has-navigation .skip-link:focus{top:12px}
+.has-navigation .nav-back{display:inline-flex;align-items:center;min-height:44px;gap:5px;font-size:12px;color:var(--nav-muted);margin:-10px 0 14px}
+.has-navigation.is-detail .content{padding-bottom:48px}
+.has-navigation .dhead h1{font-size:27px;font-weight:620;letter-spacing:-.65px}
+.has-navigation .detail .chat{border-radius:12px;box-shadow:none}
+.has-navigation .detail .side{top:95px}
+.has-navigation :is(a,button,input,select,summary):focus-visible{outline-color:var(--nav-accent)}
+@media(min-width:1000px){.has-navigation .actionbar .in{padding-inline:0}}
+@media(max-width:1150px){
+  .has-navigation .shell{grid-template-columns:196px minmax(0,1fr)}
+  .has-navigation .content{padding:30px 28px 60px}.has-navigation .topbar{padding-inline:28px}
+  .has-navigation .session-row{grid-template-columns:minmax(0,1fr) 105px 83px;gap:12px}
+  .has-navigation .recent .list-author,.has-navigation .all-projects .list-author{display:none}
+  .has-navigation .project-table-head,.has-navigation .project-table-row{grid-template-columns:minmax(0,1fr) 60px 82px 88px;gap:12px}
+  .has-navigation .project-table-head>:nth-child(3),.has-navigation .project-table-row>:nth-child(3){display:none}
+  .has-navigation .project-sessions.in-project .session-row{grid-template-columns:minmax(0,1fr) 110px 77px;gap:12px}
+  .has-navigation .project-sessions .msg-count{display:none}
+  .has-navigation .project-card-bottom{gap:9px;flex-wrap:wrap}
+  .has-navigation .crumb span:last-child{max-width:180px}
+}
+@media(min-width:760px) and (max-width:999px){
+  .has-navigation.is-detail .content{padding-bottom:110px}
+  .has-navigation .actionbar{left:196px}
+  .has-navigation .detail .side{position:static}
+}
+@media(max-width:759px){
+  .has-navigation .shell{display:block}.has-navigation .sidebar{display:none}
+  .has-navigation .topbar{min-height:62px;padding:8px 20px;gap:10px}
+  .has-navigation .mobile-brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14px;letter-spacing:-.3px;min-height:44px;white-space:nowrap}
+  .has-navigation .topbar .crumb{display:none}
+  .has-navigation .global-search{min-width:0;max-width:150px;gap:0;flex:1}
+  .has-navigation .global-search input{font-size:16px;padding-inline:4px;min-width:0}
+  .has-navigation .global-search input::placeholder{font-size:11px}
+  .has-navigation .global-search button{min-width:32px;padding-inline:6px}
+  .has-navigation .global-search:focus-within{position:absolute;left:17px;right:17px;max-width:none;background:hsl(var(--background));border:1px solid var(--nav-line);border-radius:7px;padding:0 8px;z-index:7}
+  .has-navigation .content{padding:27px 20px calc(32px + var(--mobile-nav-height))}
+  .has-navigation .pagehead{margin-bottom:26px;gap:10px;flex-wrap:wrap}
+  .has-navigation .pagehead h1{font-size:26px}.has-navigation .pagehead p{font-size:12px;max-width:38ch;line-height:1.65}
+  .has-navigation .section-head h2{font-size:14px}.has-navigation .section-head .sub{display:none}
+  .has-navigation .textlink{font-size:11px;min-height:44px}
+  .has-navigation .session-list{border-radius:10px}
+  .has-navigation .session-row{grid-template-columns:minmax(0,1fr) 63px;min-height:83px;padding:14px;gap:5px 10px}
+  .has-navigation .recent .session-note{display:none}
+  .has-navigation .session-title{font-size:12px;line-height:1.5}
+  .has-navigation .session-row>div:first-child{grid-column:1;grid-row:1}
+  .has-navigation .session-row .project-chip{grid-row:2;grid-column:1;font-size:10px;border:0;padding:0;background:none;justify-self:start;margin-top:4px}
+  .has-navigation .session-row .when{grid-column:2;grid-row:1/3;font-size:10px;align-self:center}
+  .has-navigation .session-row .list-author{display:none}
+  .has-navigation .home-projects{margin-top:28px}.has-navigation .project-grid{grid-template-columns:1fr;gap:11px}
+  .has-navigation .project-card{min-height:0;padding:17px}.has-navigation .project-card h3{font-size:13px}
+  .has-navigation .last-session{display:none}.has-navigation .project-card-bottom{padding-top:15px}
+  .has-navigation .mobile-nav{position:fixed;bottom:0;left:0;right:0;background:hsl(var(--background));border-top:1px solid var(--nav-line);display:flex;justify-content:space-around;height:var(--mobile-nav-height);padding:6px 6px calc(8px + env(safe-area-inset-bottom,0px));z-index:12}
+  .has-navigation .mobile-nav a{display:grid;justify-items:center;gap:3px;color:var(--nav-muted);font-size:10px;padding:4px 17px;min-height:44px}
+  .has-navigation .mobile-nav a[aria-current=page]{color:var(--nav-accent)}
+  .has-navigation .mobile-nav svg{width:19px;height:19px}
+  .has-navigation .toolbar{gap:8px;margin-bottom:16px}.has-navigation .searchbox{max-width:none;flex-basis:100%;min-height:44px}
+  .has-navigation .searchbox input{font-size:16px}.has-navigation .searchbox input::placeholder{font-size:12px}
+  .has-navigation .toolbar select{min-height:44px;font-size:16px;max-width:100%;flex:1;min-width:0}
+  .has-navigation .toolbar .sort{margin-left:0}.has-navigation .segmented{margin-right:auto}
+  .has-navigation .segmented :is(a,button){min-height:38px}
+  .has-navigation .projects-table{border:0;border-radius:0;display:grid;gap:12px}
+  .has-navigation .project-table-head{display:none}
+  .has-navigation .project-table-row{border:1px solid var(--nav-line);border-radius:10px;padding:17px;grid-template-columns:1fr auto;gap:12px;min-height:0}
+  .has-navigation .project-cell{grid-column:1/-1}.has-navigation .project-table-row>:nth-child(2){font-size:11px;color:var(--nav-muted)}
+  .has-navigation .mobile-count{display:inline}.has-navigation .project-table-row>:nth-child(4){display:none}
+  .has-navigation .project-table-row .when{grid-column:2;grid-row:2;text-align:right}
+  .has-navigation .project-cell p{white-space:normal;font-size:11px;max-width:31ch}
+  .has-navigation .project-title{gap:10px}.has-navigation .project-title h1{font-size:27px}
+  .has-navigation .project-title .folder-icon{width:37px;height:37px}
+  .has-navigation .project-info{gap:10px 15px;font-size:11px;margin-top:15px}
+  .has-navigation .project-tabs{margin-bottom:19px}
+  .has-navigation .project-sessions.in-project .session-row{grid-template-columns:minmax(0,1fr) 67px;gap:7px 10px;min-height:99px}
+  .has-navigation .project-sessions .session-note{font-size:10px;max-width:100%}
+  .has-navigation .project-sessions.in-project .list-author{display:flex;grid-row:2;grid-column:1;font-size:10px;margin-top:2px}
+  .has-navigation .project-sessions.in-project .list-author .author{font-size:10px}
+  .has-navigation .project-sessions.in-project .list-author .avatar{width:18px;height:18px;font-size:7px}
+  .has-navigation .project-sessions .project-chip{grid-row:3;grid-column:1}
+  .has-navigation .group-title{margin:20px 0 9px}
+  .has-navigation .btn{min-height:44px}
+  .has-navigation .footnote{font-size:10px}
+  .has-navigation .nav-back{display:inline-flex;align-items:center;min-height:44px;gap:5px;font-size:12px;color:var(--nav-muted);margin:-10px 0 14px}
+  .has-navigation.is-detail .content{padding-bottom:calc(126px + var(--mobile-nav-height))}
+  .has-navigation .actionbar{bottom:var(--mobile-nav-height);padding-bottom:12px}
+  .has-navigation .toast{bottom:calc(16px + var(--mobile-nav-height))}
+  .has-navigation.is-detail .toast{bottom:calc(100px + var(--mobile-nav-height))}
+  .has-navigation .dhead h1{font-size:24px}
+}
+@media(prefers-color-scheme:dark){.has-navigation .folder-icon{background:var(--nav-soft)}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 `;
+
 
 const icons = {
   back: '<path d="M15 6l-6 6 6 6"/>',
@@ -317,6 +554,10 @@ const icons = {
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
   chev: '<path d="M6 9l6 6 6-6"/>',
   term: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/>',
+  home: '<path d="M3 10l9-7 9 7v10H3zM9 20v-7h6v7"/>',
+  users: '<path d="M3 21v-2a6 6 0 0112 0v2M17 4a4 4 0 010 8M21 21v-2a6 6 0 00-4-5"/><circle cx="9" cy="8" r="4"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  settings: '<path d="M12 3l2 3 4-1 1 4 3 3-3 3-1 4-4-1-2 3-2-3-4 1-1-4-3-3 3-3 1-4 4 1z"/><circle cx="12" cy="12" r="3"/>',
 } as const;
 
 /** SVG paths are static; metadata never enters SVG markup. */
@@ -335,23 +576,69 @@ export function dateLabel(value: unknown, relative = false): string {
   return `<time datetime="${date.toISOString()}" title="${date.toISOString()}">${escapeHtml(label)}</time>`;
 }
 
-export function page(title: string, body: string, status = 200, detail = false): Response {
+function navigationShell(body: string, detail: boolean, options: NavigationOptions): string {
+  const destinations = [
+    { key: "home", href: "/", label: "Accueil", mobile: "Accueil", icon: "home" },
+    { key: "projects", href: "/projects", label: "Projets", mobile: "Projets", icon: "folder" },
+    { key: "sessions", href: "/sessions", label: "Toutes les sessions", mobile: "Sessions", icon: "chat" },
+  ] as const;
+  const links = (mobile = false) => destinations.map((item) => `<a href="${item.href}"${options.active === item.key ? ' aria-current="page"' : ""}>${icon(item.icon)}${mobile ? item.mobile : item.label}</a>`).join("");
+  const breadcrumbs = options.breadcrumbs.map((crumb, index) => `${index ? icon("back") : ""}${crumb.href
+    ? `<a href="${escapeHtml(crumb.href)}">${escapeHtml(crumb.label)}</a>`
+    : `<span${index === options.breadcrumbs.length - 1 ? ' aria-current="page"' : ""}>${escapeHtml(crumb.label)}</span>`}`).join("");
+  const tones = ["violet", "blue", "green", "amber"];
+  const projects = options.projects.filter((project) => project.last_synced_at !== null).slice(0, 4).map((project, index) => {
+    const href = `/projects/${encodeURIComponent(project.slug)}`;
+    const selected = options.breadcrumbs.some((crumb) => crumb.href === href) || options.backHref?.split("?")[0] === href;
+    return `<a class="side-project${selected ? " selected" : ""}" href="${escapeHtml(href)}"><span class="project-dot ${tones[index]}" aria-hidden="true"></span><span class="project-name">${escapeHtml(project.name)}</span><span class="count">${escapeHtml(project.sessions)}</span></a>`;
+  }).join("");
+  const back = detail && options.backHref
+    ? `<a class="nav-back" data-list-back href="${escapeHtml(options.backHref)}">${icon("back")}${escapeHtml(options.backLabel || "Retour aux sessions")}</a>`
+    : "";
+  return `<a class="skip-link" href="#${detail ? "view" : "home"}">Aller au contenu</a>
+<div class="shell"><aside class="sidebar" aria-label="Espace partagé">
+  <a class="brand" href="/"><span class="brand-icon">${icon("chat")}</span>Session Share</a>
+  <nav class="nav" aria-label="Navigation principale">${links()}</nav>
+  ${projects ? `<section class="side-section" aria-label="Projets récents"><div class="side-label">Projets récents <a href="/projects">Tous</a></div>${projects}</section>` : ""}
+  <div class="sidebar-bottom"><a class="help-link" href="#share-help">${icon("info")}Partager une session</a>
+    ${options.email ? `<div class="profile"><span class="avatar" aria-hidden="true">${escapeHtml(initials(options.email))}</span><small>${escapeHtml(options.email)}</small></div>` : ""}
+  </div>
+</aside><div class="shell-main"><header class="topbar">
+  <a class="mobile-brand" href="/">${icon("chat")}Session Share</a>
+  <nav class="crumb" aria-label="Fil d’Ariane">${breadcrumbs}</nav>
+  <form class="global-search" method="get" action="/sessions" role="search"><label class="sr" for="global-q">Rechercher dans toutes les sessions</label><input id="global-q" name="q" type="search" placeholder="Rechercher une session…"><button type="submit" aria-label="Rechercher dans toutes les sessions">${icon("search")}</button></form>
+</header><main class="content" id="${detail ? "view" : "home"}" tabindex="-1">${back}${body}
+  <footer class="installation" aria-label="Installer le skill Session Share"><details class="panel share-help" id="share-help"><summary>${icon("info")}Partager une session<span class="tchev">${icon("chev")}</span></summary><div class="pb">
+    <p>Pour partager une conversation, ajoutez le skill dans Claude (Paramètres → Capacités → Skills) ou dézippez-le dans <code>~/.claude/skills/</code>, puis lancez <code>/share-session</code>.</p>
+    <a class="btn" href="/share-session.skill" download>Télécharger le skill <span class="mono">share-session.skill</span></a>
+  </div></details></footer>
+</main></div></div>
+<nav class="mobile-nav" id="mobile-nav" aria-label="Navigation mobile">${links(true)}</nav>`;
+}
+
+export function page(title: string, body: string, status = 200, detail = false, options?: NavigationOptions): Response {
   const nonce = crypto.randomUUID();
   return new Response(`<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>${escapeHtml(title)}</title>
 <style>${styles}</style></head>
-<body${detail ? ' class="is-detail"' : ""}>
+<body${options ? ` class="has-navigation${detail ? " is-detail" : ""}"` : detail ? ' class="is-detail"' : ""}>
+${options ? navigationShell(body, detail, options) : `
 <header class="bar gutter"><div class="wrap">
 <a class="brand" href="/"><span class="dot" aria-hidden="true"></span>Session Share</a>
 ${detail ? `<a class="barback" href="/">${icon("back")}Sessions</a>` : ""}
 <span class="spacer"></span><span class="host">Claude Session Share</span>
 </div></header>
-<main class="gutter"><div class="wrap" id="${detail ? "view" : "home"}">${body}</div></main>
+<main class="gutter"><div class="wrap" id="${detail ? "view" : "home"}">${body}</div></main>`}
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script nonce="${nonce}">
 const toast=document.getElementById('toast');
 let toastTimer;
 function notify(message){toast.textContent=message;toast.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{toast.hidden=true;},4000);}
+const shareHelp=document.getElementById('share-help');
+if(shareHelp){
+  if(window.location?.hash==='#share-help')shareHelp.open=true;
+  for(const link of document.querySelectorAll('[href="#share-help"]'))link.addEventListener('click',()=>{shareHelp.open=true;});
+}
 for(const button of document.querySelectorAll('[data-copy]'))button.addEventListener('click',async()=>{
   try{await navigator.clipboard.writeText(button.dataset.copy);notify('Commande copiée');}
   catch{
@@ -368,7 +655,8 @@ if(conversation){
     const atBottom=conversation.scrollHeight-conversation.clientHeight-conversation.scrollTop<24;
     const viewport=window.visualViewport?.height??window.innerHeight;
     const actionbar=document.querySelector('.actionbar');
-    const bottom=window.matchMedia('(min-width:1000px)').matches?24:(actionbar?actionbar.getBoundingClientRect().height:88)+16;
+    const mobileNav=document.getElementById('mobile-nav');
+    const bottom=window.matchMedia('(min-width:1000px)').matches?24:(actionbar?actionbar.getBoundingClientRect().height:88)+(mobileNav?mobileNav.getBoundingClientRect().height:0)+16;
     const bounds=conversation.getBoundingClientRect();
     const previousViewport=parseFloat(conversation.style.getPropertyValue('--transcript-viewport'))||viewport;
     const previousBottom=parseFloat(conversation.style.getPropertyValue('--transcript-bottom'))||bottom;
