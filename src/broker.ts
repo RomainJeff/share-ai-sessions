@@ -52,9 +52,10 @@ export async function verifyBroker(token: string, env: Env): Promise<{ email: st
 export async function brokerInScope(request: Request, scope: string): Promise<boolean> {
   const path = new URL(request.url).pathname;
   if (scope === "read") return request.method === "GET" && /^\/api\/(?:sessions(?:\/[^/]+(?:\/bundle)?)?|projects(?:\/[^/]+)?)$/.test(path);
-  // Membership changes only; the routes still check the caller's role.
+  // Project administration and explicit session moves; routes still check the caller's role.
   if (scope === "projects") {
     return (request.method === "POST" && path === "/api/projects") ||
+      (request.method === "PUT" && /^\/api\/sessions\/[^/]+\/project$/.test(path)) ||
       ((request.method === "PUT" || request.method === "DELETE") && /^\/api\/projects\/[^/]+\/members\/[^/]+$/.test(path));
   }
   const id = scope.slice(6);

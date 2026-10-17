@@ -90,7 +90,7 @@ export async function api(path: string, init: RequestInit = {}): Promise<unknown
   const projects = path.startsWith("/api/projects");
   if (response.status === 403) throw new ClientError("forbidden", reason ?? `Access refused (${response.status})`);
   if (response.status === 409) {
-    if (projects) throw new ClientError("conflict", reason ?? "Conflict");
+    if (projects || path.endsWith("/project")) throw new ClientError("conflict", reason ?? "Conflict");
     throw new ClientError("offset_mismatch", "Server offset changed; full upload required");
   }
   if (response.status === 404) throw new ClientError("not_found", reason ?? (projects ? "Project not found" : "Session not found"));

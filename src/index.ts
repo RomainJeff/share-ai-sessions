@@ -5,6 +5,7 @@ import { projectsPage, projectSettingsPage } from "./routes/ui-projects";
 import { sessionListPage } from "./routes/ui-list";
 import { sessionDetailPage } from "./routes/ui-detail";
 
+import { moveSession } from "./routes/sessions-project";
 import { patchSession } from "./routes/sessions-patch";
 import { getSession } from "./routes/sessions-get";
 import { sessionBundle } from "./routes/sessions-bundle";
@@ -18,6 +19,7 @@ type Handler = (request: Request, env: Env, who: Identity, params: Record<string
 
 // One line per route; each handler lives in its own file under routes/.
 const ROUTES: [method: string, pattern: URLPattern, handler: Handler][] = [
+  ["PUT", new URLPattern({ pathname: "/api/sessions/:id/project" }), moveSession],
   ["PATCH", new URLPattern({ pathname: "/api/sessions/:id" }), patchSession],
   ["GET", new URLPattern({ pathname: "/api/sessions/:id" }), getSession],
   ["GET", new URLPattern({ pathname: "/api/sessions/:id/bundle" }), sessionBundle],

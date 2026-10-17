@@ -52,3 +52,19 @@ test("a first upload must name its project, and the preview shows it", async (t)
   const preview = await main(["upload", path, "--project", "Notes"]) as { preview: { project: string } };
   assert.equal(preview.preview.project, "notes");
 });
+
+test("move validates its arguments and preserves move conflicts instead of requesting a re-upload", async (t) => {
+  const original = process.env.SESSION_TOKEN;
+  process.env.SESSION_TOKEN = await token();
+  t.after(() => { if (original === undefined) delete process.env.SESSION_TOKEN; else process.env.SESSION_TOKEN = original; });
+  const id = crypto.randomUUID();
+  const calls: unknown[] = [];
+  t.mock.method(globalThis, "fetch", async (url: string, init: RequestInit = {}) => {
+    calls.push([url, init.method, JSON.parse(String(init.body))]);
+    return Response.json({ error: "session project changed; refresh and retry" }, { status: 409 });
+  });
+  await assert.rejects(main(["move", id, "--project", "Demo"]), { code: "conflict", message: "session project changed; refresh and retry" });
+  await assert.rejects(main(["move", "not-an-id", "--project", "demo"]), { code: "usage" });
+  await assert.rejects(main(["move", id]), { code: "usage" });
+  assert.deepEqual(calls, [[`https://sessions-mcp.example.com/api/sessions/${id}/project`, "PUT", { project: "demo" }]]);
+});

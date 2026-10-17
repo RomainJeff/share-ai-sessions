@@ -17,7 +17,7 @@ function brokerServer(env: Env, email: string): McpServer {
   const server = new McpServer({ name: "claude-session-share", version: "1.0.0" });
   server.registerTool("get_token", {
     title: "Get a Session Share token",
-    description: "Mint a 10-minute CLI token: read sessions and projects, write one session owned by you, or manage projects (create, add or remove members). Run the returned command; keep the token in memory only.",
+    description: "Mint a 10-minute CLI token: read sessions and projects, write one session owned by you, or manage projects (create, add or remove members, move sessions). Run the returned command; keep the token in memory only.",
     inputSchema: z.object({ scope: z.enum(["read", "write", "projects"]), session_id: z.string().optional() }),
   }, async ({ scope, session_id }) => {
     try {

@@ -130,5 +130,70 @@ describe("broker scopes on projects", () => {
     expect((await brokered("projects", "/api/projects", json("POST", { slug: p }))).status).toBe(201);
     expect((await brokered("projects", `/api/projects/${p}/members/${BOB}`, json("PUT", { role: "reader" }))).status).toBe(201);
     expect((await brokered("projects", "/api/sessions")).status).toBe(403);
+    const target = slug(), id = crypto.randomUUID();
+    await create(ALICE, target);
+    await upload(ALICE, { id, project: p });
+    for (const scope of ["read", `write:${id}`]) {
+      expect((await brokered(scope, `/api/sessions/${id}/project`, json("PUT", { project: target }))).status).toBe(403);
+    }
+    expect((await brokered("projects", `/api/sessions/${id}/project`, json("PUT", { project: target }))).status).toBe(200);
+  });
+});
+
+describe("moving sessions between projects", () => {
+  const move = (email: string, id: string, project: string) =>
+    call(email, `/api/sessions/${id}/project`, json("PUT", { project }));
+
+  async function fixture() {
+    const source = slug(), target = slug(), id = crypto.randomUUID();
+    await create(ALICE, source);
+    await create(ALICE, target);
+    await setRole(ALICE, source, BOB, "writer");
+    await upload(BOB, { id, project: source, title: "Keep my transcript" });
+    return { source, target, id };
+  }
+
+  it("lets a source owner move another author's session without changing its content or owner", async () => {
+    const { source, target, id } = await fixture();
+    const before = await (await call(ALICE, `/api/sessions/${id}/bundle`)).arrayBuffer();
+    const moved = await move(ALICE, id, target);
+    expect(moved.status).toBe(200);
+    expect(await moved.json()).toMatchObject({ id, project: target, previous_project: source });
+    expect(await (await call(ALICE, `/api/sessions/${id}`)).json()).toMatchObject({ owner_email: BOB, project: target });
+    expect(await (await call(ALICE, `/api/sessions/${id}/bundle`)).arrayBuffer()).toEqual(before);
+    expect((await call(BOB, `/api/sessions/${id}`)).status).toBe(404);
+    expect((await call(BOB, `/api/sessions/${id}`, { method: "PATCH", headers: { "X-Base-Offset": "16" }, body: '{"more":1}\n' })).status).toBe(403);
+    await setRole(ALICE, target, BOB, "writer");
+    expect((await upload(BOB, { id })).status).toBe(200);
+    expect(await (await call(BOB, `/api/sessions/${id}`)).json()).toMatchObject({ project: target });
+    const projects = await (await call(ALICE, "/api/projects")).json() as { projects: {slug: string; sessions: number}[] };
+    expect(projects.projects.find(p => p.slug === source)?.sessions).toBe(0);
+    expect(projects.projects.find(p => p.slug === target)?.sessions).toBe(1);
+  });
+
+  it("lets a session author move it with writer rights in both projects", async () => {
+    const { source, target, id } = await fixture();
+    await setRole(ALICE, target, BOB, "writer");
+    expect((await move(BOB, id, target)).status).toBe(200);
+    expect((await move(BOB, id, target)).status).toBe(200);
+    expect(await (await call(BOB, `/api/sessions/${id}`)).json()).toMatchObject({ project: target });
+    expect((await move(BOB, id, source)).status).toBe(200);
+  });
+
+  it("rejects readers, unrelated writers, hidden destinations and invalid input without moving", async () => {
+    const { source, target, id } = await fixture();
+    expect((await move(BOB, id, target)).status).toBe(404);
+    await setRole(ALICE, target, BOB, "reader");
+    expect((await move(BOB, id, target)).status).toBe(403);
+    await setRole(ALICE, target, BOB, "writer");
+    await setRole(ALICE, source, BOB, "reader");
+    expect((await move(BOB, id, target)).status).toBe(403);
+    await setRole(ALICE, source, CAROL, "writer");
+    await setRole(ALICE, target, CAROL, "writer");
+    expect((await move(CAROL, id, target)).status).toBe(403);
+    expect((await move(ALICE, crypto.randomUUID(), target)).status).toBe(404);
+    expect((await move(ALICE, id, "../invalid")).status).toBe(400);
+    expect((await call(ALICE, `/api/sessions/${id}/project`, { method: "PUT", body: "{" })).status).toBe(400);
+    expect(await (await call(ALICE, `/api/sessions/${id}`)).json()).toMatchObject({ project: source });
   });
 });
