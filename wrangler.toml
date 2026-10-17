@@ -27,6 +27,6 @@ id = "00000000000000000000000000000000"
 [vars]
 OIDC_CLIENT_ID = "replace-with-access-saas-oidc-client-id"
 # Public identifiers, not secrets.AUD is a placeholder
-# until the Access app for sessions.example.com exists (T00).
+# set from the sessions.example.com Access app (T00).
 ACCESS_TEAM_DOMAIN = "example.cloudflareaccess.com"
-ACCESS_AUD = "replace-with-sessions-access-app-aud"
+ACCESS_AUD = "your-access-application-aud"
