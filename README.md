@@ -6,6 +6,10 @@ Share Claude Code and Codex session transcripts with your team: upload, sync, br
 
 *Homepage with fictional sessions, authors, and projects.*
 
+![Shared session reader showing the conversation, intermediate steps, session details, and resume action](docs/images/session.png)
+
+*A fictional shared session, ready to resume in Claude Code or Codex.*
+
 - `src/`: the Worker (reader UI, API, MCP broker for clients without `cloudflared`)
 - `skills/share-session/`: the skill and its dependency-free Node 24+ client
 - `migrations/`: D1 schema
