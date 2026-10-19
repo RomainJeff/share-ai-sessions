@@ -2,6 +2,10 @@
 
 Share Claude Code and Codex session transcripts with your team: upload, sync, browse by project, and resume a session in either harness. A Cloudflare Worker (R2 + D1) behind Cloudflare Access serves the reader and the API; the `share-session` skill is the client.
 
+[![Video: share a Claude Code session, then a teammate resumes and forks it in Codex (47 s, with voiceover)](docs/images/video-poster.png)](docs/video/share-session-flow.mp4)
+
+*Watch the flow (47 s, sound on): share a Claude Code session, then a teammate forks it in Codex.*
+
 ![Homepage showing shared sessions, a fork attributed to its original author, and four active projects](docs/images/homepage.png)
 
 *Homepage with fictional sessions, authors, and projects.*
