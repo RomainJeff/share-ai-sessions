@@ -2,6 +2,10 @@
 
 Share Claude Code and Codex session transcripts with your team: upload, sync, browse by project, and resume a session in either harness. A Cloudflare Worker (R2 + D1) behind Cloudflare Access serves the reader and the API; the `share-session` skill is the client.
 
+![Homepage showing shared sessions, a fork attributed to its original author, and four active projects](docs/images/homepage.png)
+
+*Homepage with fictional sessions, authors, and projects.*
+
 - `src/`: the Worker (reader UI, API, MCP broker for clients without `cloudflared`)
 - `skills/share-session/`: the skill and its dependency-free Node 24+ client
 - `migrations/`: D1 schema
