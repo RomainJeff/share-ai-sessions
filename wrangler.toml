@@ -1,8 +1,9 @@
+# Template: copy into your own deployment and replace every example value.
 name = "claude-session-share"
 main = "src/index.ts"
 compatibility_date = "2026-08-01"
 
-# Access protects the custom domain, not workers.dev.
+# Access protects the custom domains, not workers.dev.
 workers_dev = false
 routes = [{ pattern = "sessions.example.com", custom_domain = true }, { pattern = "sessions-mcp.example.com", custom_domain = true }]
 
@@ -16,16 +17,16 @@ database_name = "claude-session-share"
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "./migrations"
 
-# Provision in T12. The MCP host requires an Access Bypass policy; OAuth uses the
-# allowlisted Access SaaS OIDC app. Secrets: BROKER_SIGNING_KEY (>=32 bytes), OIDC_CLIENT_SECRET.
+# The MCP host requires an Access Bypass policy; OAuth uses an allowlisted Access SaaS OIDC app.
+# Secrets: BROKER_SIGNING_KEY (>=32 bytes), OIDC_CLIENT_SECRET.
 [[kv_namespaces]]
 binding = "OAUTH_KV"
-id = "00000000000000000000000000000000" # title: claude-session-share-oauth
+id = "00000000000000000000000000000000"
 
+# Public identifiers, not secrets.
 [vars]
+BROKER_ORIGIN = "https://sessions-mcp.example.com"
 OIDC_CLIENT_ID = "your-access-oidc-client-id"
-# Public identifiers, not secrets.AUD
-# set from the sessions.example.com Access app (T00).
 ACCESS_TEAM_DOMAIN = "example.cloudflareaccess.com"
 ACCESS_AUD = "your-access-application-aud"
 

@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { api, ClientError } from "../lib.ts";
+import { api, ClientError, loadBaseUrl } from "../lib.ts";
 
 const USAGE = "Usage: client.ts project list | create <slug> [--name <name>] | show <slug> | add <slug> <email> [--role reader|writer|owner] | remove <slug> <email>";
 const ROLES = ["reader", "writer", "owner"];
@@ -25,5 +25,5 @@ export async function project(args: string[]): Promise<unknown> {
   const role = typeof parsed.values.role === "string" ? parsed.values.role : "reader";
   if (!ROLES.includes(role)) throw new ClientError("usage", `Role must be one of ${ROLES.join(", ")}`);
   const result = await api(member(slug!, email!), json("PUT", { role }));
-  return { ...(result as object), reminder: `${email} also needs to be allowed by the Cloudflare Access policy of sessions.example.com` };
+  return { ...(result as object), reminder: `${email} also needs to be allowed by the Cloudflare Access policy of ${new URL(await loadBaseUrl()).host}` };
 }

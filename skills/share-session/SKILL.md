@@ -5,7 +5,7 @@ description: Share or resume Claude Code and Codex sessions (JSONL), convert bet
 
 # Share Session
 
-Uploads Claude Code and Codex session transcripts to `sessions.example.com` (Cloudflare Worker behind Access) and lists them. Every call goes through the deterministic client:
+Uploads Claude Code and Codex session transcripts to your Session Share server (Cloudflare Worker behind Access) and lists them. Every call goes through the deterministic client:
 
 ```bash
 node <skill dir>/scripts/client.ts <command>
@@ -17,7 +17,7 @@ It prints one JSON result on stdout. On failure it prints safe JSON on stderr an
 
 ## Install (any machine)
 
-Install with `npx skills add RomainJeff/share-ai-sessions` (needs read access to that GitHub repo), or download `share-session.skill` from the reader's home page (https://sessions.example.com, behind Access) and add it in Claude, or unzip it into `~/.claude/skills/` (or a repo's `.claude/skills/`). Alternatively copy or symlink this whole folder there. Requirements: Node 24+, `cloudflared`, and an email allowed by the Access policy.
+Download `share-session.skill` from your server's home page (behind Access, comes preconfigured), or install with `npx skills add RomainJeff/share-ai-sessions` and create the config (see Config) and add it in Claude, or unzip it into `~/.claude/skills/` (or a repo's `.claude/skills/`). Alternatively copy or symlink this whole folder there. Requirements: Node 24+, `cloudflared`, and an email allowed by the Access policy.
 
 ## First use: guided setup
 
@@ -27,9 +27,9 @@ If `~/.claude/session-share/manifest.json` does not exist (never used on this ma
 |-----------------|----|
 | `node_unsupported` | Tell the user Node 24+ is required (`node --version`); propose `brew install node` or their version manager. Stop until fixed |
 | `cloudflared_missing` | Propose `brew install cloudflared`; run it only after a yes |
-| `login_required` / `unauthorized` | Ask the user to run `cloudflared access login https://sessions.example.com` in their own terminal (browser SSO, you cannot do it). If it reports `no such host` while the domain resolves elsewhere, suggest flushing the macOS DNS cache: `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder` |
+| `login_required` / `unauthorized` | Ask the user to run `cloudflared access login <baseUrl>` in their own terminal (browser SSO, you cannot do it). If it reports `no such host` while the domain resolves elsewhere, suggest flushing the macOS DNS cache: `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder` |
 | `forbidden` | Their email is not in the Access policy: ask the owner to add it. Nothing to fix locally |
-| `invalid_config` | Show the override file path; propose deleting it (default URL works) |
+| `invalid_config` | Show the config file path; ask the user for their server URLs and propose writing it from `config.example.json` |
 | No `cloudflared` possible (cloud session, locked machine) | Use the MCP broker below instead |
 | Success | Setup done. If it reports `stop_hook: false`, offer to install the Stop hook (see "Automatic sync at turn end") so shared sessions sync by themselves; install only on a yes |
 
@@ -37,14 +37,14 @@ Never run the login, type credentials, or read `~/.cloudflared/`. Setup ends at 
 
 ## Config
 
-- None required: the client targets `https://sessions.example.com`. To override, create `~/.claude/session-share/config.json` (or point `SESSION_SHARE_CONFIG` at a file) from `config.example.json` next to this file. It holds only `baseUrl`, no secret.
-- Auth is the user's own Cloudflare Access identity via `cloudflared`: once per machine, `cloudflared access login https://sessions.example.com` in the user's terminal. The client then asks `cloudflared access token` on every call.
+- The client reads `~/.claude/session-share/config.json` (or the file `SESSION_SHARE_CONFIG` points at), else `config.json` next to this file (baked into the downloaded `.skill`). Template: `config.example.json`. It holds only `baseUrl` (reader host) and `brokerUrl` (MCP host), no secret.
+- Auth is the user's own Cloudflare Access identity via `cloudflared`: once per machine, `cloudflared access login <baseUrl>` in the user's terminal. The client then asks `cloudflared access token` on every call.
 
 ## MCP broker (without cloudflared)
 
-- Connector: `https://sessions-mcp.example.com/mcp`, OAuth through the allowlisted Access OIDC app.
+- Connector: `<brokerUrl>/mcp`, OAuth through the allowlisted Access OIDC app.
 - Call `get_token({scope: "read"})` for list/read (sessions and projects), `get_token({scope: "write", session_id: "<lowercase UUID>"})` for upload/sync of one session, or `get_token({scope: "projects"})` for `project create`, `add`, `remove` and `move <id> --project <slug>`. Another person's session cannot receive a write token. Roles still apply: a token never grants more than the user's role in the project.
-- The response contains `token`, `expires_at`, `base_url`, and `command`. Execute the returned command, replacing `<share-session skill dir>` with this skill's base directory and `<path.jsonl>` for upload. `SESSION_TOKEN` makes the client use the MCP host API without local config or cloudflared.
+- The response contains `token`, `expires_at`, `base_url`, and `command`. Execute the returned command, replacing `<share-session skill dir>` with this skill's base directory and `<path.jsonl>` for upload. `SESSION_TOKEN` makes the client use the MCP host API without cloudflared; the token must come from the configured `brokerUrl`.
 - Tokens expire after 10 minutes. Keep them only in the command's environment prefix; never save them to files or config, or include them in user-facing output. `token_expired` means call `get_token` again; `invalid_token` means obtain a fresh token from this connector.
 - Read scope cannot write; write scope can only upload/PATCH its session and cannot read or delete. Obtain a read token separately for read operations. Automatic cloud hooks and setup are T11.
 
@@ -61,7 +61,7 @@ Every session lives in exactly one **project**, chosen by the user, independent 
 - A session outside your projects does not exist for you: list, reader page, bundle and pull all answer "not found".
 - **Choosing the project at upload.** Before the first `upload` of a session, run `project list` and ask the user which project it goes into, showing the projects where they are `writer` or `owner`. Suggest the one most related to the session's subject or repo, but let the user decide. If none fits, offer to create one (`project create <slug> --name "<name>"`) and do it only on a yes. Never pick silently.
 - **Assignment.** Re-uploads and syncs keep the session’s current project; new forks and compaction continuations inherit their origin’s current project. Omit `--project` on these uploads. To change an existing session’s project, use `move <full UUID> --project <slug>` or **Détails → Changer de projet** in the reader. The caller needs writer rights on the destination and must be either the session author with writer rights on the source, or an owner of the source project. Move only on the user’s explicit request. Moving changes access to the destination’s members, preserves the author and transcript, and leaves existing forks and continuations in their own projects. The author needs writer rights on the destination for later syncs; a move never adds members automatically.
-- **Adding people.** `project add <slug> <email> --role reader|writer|owner` (default `reader`) also changes the role of an existing member. The person must also be allowed by the Cloudflare Access policy of `sessions.example.com`: remind the user, the client cannot do it. Run `add` and `remove` only when the user asked for that change, for that email.
+- **Adding people.** `project add <slug> <email> --role reader|writer|owner` (default `reader`) also changes the role of an existing member. The person must also be allowed by the Cloudflare Access policy of the server: remind the user, the client cannot do it. Run `add` and `remove` only when the user asked for that change, for that email.
 - A project always keeps at least one owner. A member can leave a project with `project remove <slug> <own email>`.
 - Sessions shared before projects existed are in the `legacy` project, whose owners are everyone who had uploaded at that time.
 
@@ -115,9 +115,9 @@ The **Reprendre** button copies `/share-session pull <id>` for use in Claude Cod
 
 ## Errors
 
-- `invalid_config`: fix or delete the override config file.
+- `invalid_config`: fix or create the config file (see Config).
 - `cloudflared_missing`: propose `brew install cloudflared`.
-- `login_required` or `unauthorized`: ask the user to run `cloudflared access login https://sessions.example.com`, then rerun `doctor`.
+- `login_required` or `unauthorized`: ask the user to run `cloudflared access login <baseUrl>`, then rerun `doctor`.
 - `project_required`: a first upload needs `--project <slug>`; ask the user which project (see "Projects and rights").
 - `forbidden` on upload or sync: the session id already belongs to someone else, or the user is not `writer` on the project. The message says which.
 - `forbidden` on `project add/remove`: only owners manage members.

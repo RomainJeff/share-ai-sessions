@@ -1,6 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
 
-export const BROKER_ISSUER = "https://sessions-mcp.example.com";
 export const BROKER_AUD = "session-share-cli";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const validScope = (scope: unknown): scope is string =>
@@ -27,10 +26,10 @@ export async function mintSessionToken(env: Env, email: string, scope: string, s
   }
   const expiresAt = Math.floor(Date.now() / 1000) + 600;
   const token = await new SignJWT({ scope: scope === "write" ? `write:${sessionId}` : scope })
-    .setProtectedHeader({ alg: "HS256" }).setSubject(email).setIssuer(BROKER_ISSUER)
+    .setProtectedHeader({ alg: "HS256" }).setSubject(email).setIssuer(env.BROKER_ORIGIN)
     .setAudience(BROKER_AUD).setIssuedAt().setExpirationTime(expiresAt).sign(key);
   return {
-    token, expires_at: new Date(expiresAt * 1000).toISOString(), base_url: BROKER_ISSUER,
+    token, expires_at: new Date(expiresAt * 1000).toISOString(), base_url: env.BROKER_ORIGIN,
     command: `SESSION_TOKEN=${token} node <share-session skill dir>/scripts/client.ts ${{ read: "list", write: "upload <path.jsonl>", projects: "project create <slug>" }[scope]}`,
   };
 }
@@ -38,7 +37,7 @@ export async function mintSessionToken(env: Env, email: string, scope: string, s
 export async function verifyBroker(token: string, env: Env): Promise<{ email: string; scope: string } | null> {
   try {
     const { payload } = await jwtVerify(token, signingKey(env), {
-      algorithms: ["HS256"], issuer: BROKER_ISSUER, audience: BROKER_AUD, requiredClaims: ["exp", "iat", "sub"],
+      algorithms: ["HS256"], issuer: env.BROKER_ORIGIN, audience: BROKER_AUD, requiredClaims: ["exp", "iat", "sub"],
       maxTokenAge: "10m",
     });
     if (typeof payload.sub !== "string" || !payload.sub.includes("@") || !validScope(payload["scope"])) return null;

@@ -1,1 +1,1 @@
-{ "baseUrl": "https://sessions.example.com" }
+{ "baseUrl": "https://sessions.example.com", "brokerUrl": "https://sessions-mcp.example.com" }

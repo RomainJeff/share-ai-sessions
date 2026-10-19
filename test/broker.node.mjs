@@ -2,8 +2,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SignJWT, decodeJwt } from "jose";
-import { mintSessionToken, verifyBroker, brokerInScope, BROKER_ISSUER, BROKER_AUD } from "../src/broker.ts";
-const env = { BROKER_SIGNING_KEY: "test-only-broker-key-at-least-32-bytes" };
+import { mintSessionToken, verifyBroker, brokerInScope, BROKER_AUD } from "../src/broker.ts";
+const env = { BROKER_SIGNING_KEY: "test-only-broker-key-at-least-32-bytes", BROKER_ORIGIN: "https://sessions-mcp.example.com" };
+const BROKER_ISSUER = env.BROKER_ORIGIN;
 const email = "alice@example.com";
 
 test("minted read token has the OAuth email, pinned issuer/audience and 600-second lifetime", async () => {

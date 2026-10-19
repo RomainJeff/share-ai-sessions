@@ -5,10 +5,10 @@ import {
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { decodeJwt } from "jose";
 import { z } from "zod";
-import { BROKER_ISSUER, mintSessionToken } from "../broker";
+import { mintSessionToken } from "../broker";
 
 const OAUTH_SCOPE = "sessions:token";
-const issuerOf = (_env: Env) => BROKER_ISSUER;
+const issuerOf = (env: Env) => env.BROKER_ORIGIN;
 const fail = (error: string, status: number) => Response.json({ error }, { status });
 type Props = { email: string };
 

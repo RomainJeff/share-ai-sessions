@@ -2,10 +2,11 @@ import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-// Optional override (URL only, no secret). Template: config.example.json next to this skill.
+// Server URLs (no secret): the user's override, else the config.json baked in by build-skill.sh.
 export const CONFIG_PATH = process.env.SESSION_SHARE_CONFIG ?? join(homedir(), ".claude/session-share/config.json");
-export const DEFAULT_BASE_URL = "https://sessions.example.com";
+export const BUNDLED_CONFIG_PATH = fileURLToPath(new URL("../config.json", import.meta.url));
 
 export class ClientError extends Error {
   readonly code: string;
@@ -15,22 +16,32 @@ export class ClientError extends Error {
   }
 }
 
-export async function loadBaseUrl(): Promise<string> {
-  let raw: string;
-  try {
-    raw = await readFile(CONFIG_PATH, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return DEFAULT_BASE_URL;
-    throw new ClientError("invalid_config", `Cannot read ${CONFIG_PATH}`);
+const httpsOrigin = (value: unknown): string => {
+  const url = new URL(String(value));
+  if (url.protocol !== "https:" && url.hostname !== "localhost") throw new Error();
+  return url.origin;
+};
+
+export async function loadConfig(): Promise<{ baseUrl: string; brokerUrl?: string }> {
+  for (const path of [CONFIG_PATH, BUNDLED_CONFIG_PATH]) {
+    let raw: string;
+    try {
+      raw = await readFile(path, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw new ClientError("invalid_config", `Cannot read ${path}`);
+    }
+    try {
+      const { baseUrl, brokerUrl } = JSON.parse(raw);
+      return { baseUrl: httpsOrigin(baseUrl), ...(brokerUrl === undefined ? {} : { brokerUrl: httpsOrigin(brokerUrl) }) };
+    } catch {
+      throw new ClientError("invalid_config", `${path}: baseUrl and brokerUrl must be https origins`);
+    }
   }
-  try {
-    const url = new URL(JSON.parse(raw).baseUrl);
-    if (url.protocol !== "https:" && url.hostname !== "localhost") throw new Error();
-    return url.origin;
-  } catch {
-    throw new ClientError("invalid_config", "baseUrl must be an https origin");
-  }
+  throw new ClientError("invalid_config", `No server configured: create ${CONFIG_PATH} from config.example.json`);
 }
+
+export const loadBaseUrl = async (): Promise<string> => (await loadConfig()).baseUrl;
 
 /**
  * Access user JWT from cloudflared's own cache (~/.cloudflared). Never written, logged or printed
@@ -61,8 +72,9 @@ export async function api(path: string, init: RequestInit = {}): Promise<unknown
     try {
       // Routing/expiry check only; the Worker verifies the signature. Pin the origin so an
       // untrusted issuer claim cannot redirect a credential to another host.
+      const { brokerUrl } = await loadConfig();
       const claims = JSON.parse(Buffer.from(brokerToken.split(".")[1] ?? "", "base64url").toString("utf8"));
-      if (claims.iss !== "https://sessions-mcp.example.com" || claims.aud !== "session-share-cli" || typeof claims.exp !== "number") {
+      if (!brokerUrl || claims.iss !== brokerUrl || claims.aud !== "session-share-cli" || typeof claims.exp !== "number") {
         throw new Error();
       }
       if (claims.exp * 1000 <= Date.now()) throw new ClientError("token_expired", "Call get_token for a fresh broker token");

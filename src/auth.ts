@@ -26,7 +26,7 @@ export async function identify(request: Request, env: Env): Promise<Identity | n
     if (broker) return { email: broker.email, name: broker.email.split("@")[0]!, brokerScope: broker.scope };
   }
   // The bypass host accepts only broker tokens for data, never an edge Access header.
-  if (new URL(request.url).hostname === "sessions-mcp.example.com") return null;
+  if (new URL(request.url).origin === env.BROKER_ORIGIN) return null;
   const token = request.headers.get("Cf-Access-Jwt-Assertion") ?? bearer;
   if (!token) return null;
   try {

@@ -8,7 +8,7 @@ const token = (iss = "https://sessions-mcp.example.com", exp = "10m") => new Sig
   .setProtectedHeader({ alg: "HS256" }).setSubject("alice@example.com").setIssuer(iss)
   .setAudience("session-share-cli").setIssuedAt().setExpirationTime(exp).sign(key);
 
-test("SESSION_TOKEN reaches the broker API without config or cloudflared and is not returned", async (t) => {
+test("SESSION_TOKEN reaches the configured broker API without cloudflared and is not returned", async (t) => {
   const jwt = await token();
   const original = process.env.SESSION_TOKEN;
   process.env.SESSION_TOKEN = jwt;

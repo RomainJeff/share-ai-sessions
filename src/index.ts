@@ -13,7 +13,7 @@ import { sessionBundle } from "./routes/sessions-bundle";
 import { skillDownload } from "./routes/skill-download";
 import { createProject, deleteMember, getProject, listProjects, putMember } from "./routes/projects";
 
-import { BROKER_ISSUER, brokerInScope } from "./broker";
+import { brokerInScope } from "./broker";
 import { handleMcpHost } from "./routes/mcp";
 
 type Handler = (request: Request, env: Env, who: Identity, params: Record<string, string>) => Promise<Response>;
@@ -58,7 +58,7 @@ const ROUTES: [method: string, pattern: URLPattern, handler: Handler][] = [
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    if (url.origin === BROKER_ISSUER && !url.pathname.startsWith("/api/")) return handleMcpHost(request, env, ctx);
+    if (url.origin === env.BROKER_ORIGIN && !url.pathname.startsWith("/api/")) return handleMcpHost(request, env, ctx);
     // Access guards the custom domain; the Worker checks the JWT itself anyway (defence in depth).
     const who = await identify(request, env);
     if (!who) return Response.json({ error: "unauthorized" }, { status: 401 });

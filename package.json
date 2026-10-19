@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "test": "vitest run && npm run test:cli",
-    "test:cli": "node --test cli/*.test.ts test/*.node.mjs",
+    "test:cli": "SESSION_SHARE_CONFIG=cli/fixtures/config.json node --test cli/*.test.ts test/*.node.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p cli",
     "build:skill": "sh scripts/build-skill.sh",
     "pretest": "npm run build:skill",
