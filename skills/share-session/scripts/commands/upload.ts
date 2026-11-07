@@ -62,7 +62,9 @@ export function sanitize(jsonl: string, options: RedactionOptions = {}) {
  */
 async function prepare(path: string, jsonl: string, options: UploadOptions) {
   const { cwd, ...meta } = readMeta(jsonl, path);
-  const { sessions, forks, continuations } = await readManifest();
+  const { sessions, forks, continuations, relays } = await readManifest();
+  const relayed = relays?.[meta.id];
+  if (relayed) throw new ClientError("relayed", `Session is relayed from ${relayed.app}; its transcript is never uploaded. Renew the link with relay`);
   const inherited = !!(sessions[meta.id] || forks?.[meta.id] || continuations?.[meta.id]);
   const body = {
     ...meta, cwd_base: cwd, repo: detectRepo(cwd ?? process.cwd()),

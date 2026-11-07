@@ -47,4 +47,6 @@ test("scope gate preserves the upload body and allows only the target session", 
   assert.equal(await brokerInScope(new Request(`${BROKER_ISSUER}/api/sessions/${id}`, { method: "PATCH" }), `write:${id}`), true);
   assert.equal(await brokerInScope(new Request(`${BROKER_ISSUER}/api/sessions/other`, { method: "PATCH" }), `write:${id}`), false);
   assert.equal(await brokerInScope(new Request(`${BROKER_ISSUER}/api/sessions/${id}`, { method: "DELETE" }), `write:${id}`), false);
+  assert.equal(await brokerInScope(new Request(`${BROKER_ISSUER}/api/sessions/${id}/relay`, { method: "PUT" }), `write:${id}`), true);
+  assert.equal(await brokerInScope(new Request(`${BROKER_ISSUER}/api/sessions/other/relay`, { method: "PUT" }), `write:${id}`), false);
 });

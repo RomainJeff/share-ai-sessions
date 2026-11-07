@@ -2,7 +2,7 @@ import type { Identity } from "../auth";
 import { MEMBER, VISIBLE, visibleSince } from "../db";
 
 const COLUMNS =
-  "id, owner_email, owner_name, project, repo, branch, title, summary, model, cc_version, msg_count, bytes, created_at, updated_at, last_synced_at";
+  "id, owner_email, owner_name, project, repo, branch, title, summary, model, cc_version, msg_count, bytes, created_at, updated_at, last_synced_at, external_app, external_url, external_expires_at";
 
 /** GET /api/sessions?project=&repo=&author=&mine=1&q= — newest first, retention- and membership-filtered. */
 export async function listSessions(request: Request, env: Env, who: Identity): Promise<Response> {

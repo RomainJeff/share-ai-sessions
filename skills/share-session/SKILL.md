@@ -1,6 +1,6 @@
 ---
 name: share-session
-description: Share or resume Claude Code and Codex sessions (JSONL), convert between harnesses on Claude Session Share into a project you pick, list shared sessions by project, repo, author or title, sync new lines, stop syncing a session, move sessions between projects, or manage who can read or write them.
+description: Share or resume Claude Code and Codex sessions (JSONL), convert between harnesses on Claude Session Share into a project you pick, relay a link to a session hosted by another app (T3 Code), list shared sessions by project, repo, author or title, sync new lines, stop syncing a session, move sessions between projects, or manage who can read or write them.
 ---
 
 # Share Session
@@ -43,7 +43,7 @@ Never run the login, type credentials, or read `~/.cloudflared/`. Setup ends at 
 ## MCP broker (without cloudflared)
 
 - Connector: `<brokerUrl>/mcp`, OAuth through the allowlisted Access OIDC app.
-- Call `get_token({scope: "read"})` for list/read (sessions and projects), `get_token({scope: "write", session_id: "<lowercase UUID>"})` for upload/sync of one session, or `get_token({scope: "projects"})` for `project create`, `add`, `remove` and `move <id> --project <slug>`. Another person's session cannot receive a write token. Roles still apply: a token never grants more than the user's role in the project.
+- Call `get_token({scope: "read"})` for list/read (sessions and projects), `get_token({scope: "write", session_id: "<lowercase UUID>"})` for upload/sync/relay of one session, or `get_token({scope: "projects"})` for `project create`, `add`, `remove` and `move <id> --project <slug>`. Another person's session cannot receive a write token. Roles still apply: a token never grants more than the user's role in the project.
 - The response contains `token`, `expires_at`, `base_url`, and `command`. Execute the returned command, replacing `<share-session skill dir>` with this skill's base directory and `<path.jsonl>` for upload. `SESSION_TOKEN` makes the client use the MCP host API without cloudflared; the token must come from the configured `brokerUrl`.
 - Tokens expire after 10 minutes. Keep them only in the command's environment prefix; never save them to files or config, or include them in user-facing output. `token_expired` means call `get_token` again; `invalid_token` means obtain a fresh token from this connector.
 - Read scope cannot write; write scope can only upload/PATCH its session and cannot read or delete. Obtain a read token separately for read operations. Automatic cloud hooks and setup are T11.
@@ -81,7 +81,8 @@ Every session lives in exactly one **project**, chosen by the user, independent 
 | `upload <path.jsonl> [--project <slug>] [--strip-thinking] [--strip-tool-results] [--confirm <hash>]` | Previews, then uploads after consent. `--project` is required for a session's first upload (`project_required` otherwise) and omitted for re-uploads, forks and continuations, which inherit it. Strip flags remove thinking or inline tool-result payloads for a read-only share; keep the same flags when confirming. `repo` = `owner/repo` from the session cwd's `git remote get-url origin` (cwd basename otherwise) |
 | `sync <id>` / `sync --all` | Send complete new lines, redacted with the upload's strip policy, for one opted-in session or every manifest entry. Server bytes/hash of the sanitized stream decide the offset; conflict or rewritten prefix triggers a full replacement |
 | `stop <id>` / `stop current` | Remove the local manifest entry and record a stop tombstone, without deleting the remote session. Durable: hook and manual sync stay off until a new consented upload. Returns a `share-session:opt-out <id>` marker; keep it in the conversation. `current` uses `CLAUDE_SESSION_ID` or `CODEX_THREAD_ID`; otherwise pass the id |
-| `list [--project slug] [--repo owner/repo] [--author email] [--mine] [--q text]` | Live sessions (synced within 90 days) of your projects, newest first. Render as a compact table: id, title, project, repo, author, date, messages |
+| `relay <id> --app <slug> --url <https url> [--expires <ISO>] [--project <slug>] [--transcript <path.jsonl>]` | List a session hosted by another app as a link, without its transcript (see "Relayed sessions") |
+| `list [--project slug] [--repo owner/repo] [--author email] [--mine] [--q text]` | Live sessions (synced within 90 days) of your projects, newest first. Render as a compact table: id, title, project, repo, author, date, messages; relayed sessions add `app`, `url` and `expires` |
 | `move <id> --project <slug>` | Move an existing session; full UUID required. Cloud: use a `projects` token. |
 | `project list` | Your projects with your role, member and session counts |
 | `project create <slug> [--name <name>]` | New project (`a-z`, `0-9`, inner dashes, 64 chars max), you become its owner |
@@ -94,6 +95,15 @@ Locate the current transcript using the current harness:
 - Codex: recursively find `rollout-*-<CODEX_THREAD_ID>.jsonl` under `${CODEX_HOME:-~/.codex}/sessions/`. If the ID is unavailable, locate candidates by their `session_meta.payload.cwd` and timestamp; verify the ID and subject before uploading. Never assume the rollout filename itself is the UUID.
 
 Upload and manual `sync` support both formats. The manifest/config remain shared under `~/.claude/session-share/` for compatibility. Automatic Stop-hook sync is currently Claude Code only; for Codex use manual `sync <id>` or `sync --all`. Do not install a Claude Stop hook into Codex configuration.
+
+## Relayed sessions
+
+When a session already lives in another app that gives a shareable link (first case: a T3 Code guest link to a live thread, `https://<host>/guest#<invite>`, valid 24 h), relay the link instead of uploading. Relay only when the user asked for it; that request is the consent.
+
+- `relay <id> --app t3code --url <link> --expires <ISO> --project <slug> --transcript <path.jsonl>`: `--project` follows the upload rules (required the first time, locked afterwards). `--transcript` only fills the metadata (title, repo, branch, model, version, message count, cwd), redacted like an upload's; no transcript line is ever sent.
+- Result: `{ id, owner_email, project, external_app, external_url, external_expires_at, url }`, `url` being the Session Share page. The session shows in lists and project pages with the app's badge; its page opens the link, or shows it as expired.
+- Renew before expiry with the same command and the new link; `--project` and `--transcript` can be omitted. Each relay counts as activity for the 90-day window.
+- `sync`, `sync --all` and the Stop hook skip relayed sessions; `upload` and `pull` refuse them with `relayed` (pull gives the link). `stop <id>` forgets the local entry like for an upload.
 
 ## Stop hook check
 
@@ -123,7 +133,8 @@ The **Reprendre** button copies `/share-session pull <id>` for use in Claude Cod
 - `forbidden` on `project add/remove`: only owners manage members.
 - `not_found` on a session or project: it does not exist, or the user is not a member of its project.
 - `bad_request: project is locked to …`: drop `--project`, the session inherits its project.
-- `conflict`: the project slug is taken, or the change would leave the project without an owner.
+- `conflict`: the project slug is taken, the change would leave the project without an owner, or `relay` targets a session already shared with its transcript.
+- `relayed`: the session is hosted by another app; renew it with `relay`, open its link to read it.
 - `confirmation_mismatch`: request a new preview and user agreement for the current content and options.
 - `invalid_jsonl`: an incomplete or malformed line was refused without sending it; retry once the transcript finishes writing.
 

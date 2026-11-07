@@ -1,10 +1,10 @@
 import type { ProjectSummary } from "./navigation";
 import type { Role } from "./db";
-import { dateLabel, escapeHtml as e, icon, initials } from "./ui";
+import { appName, dateLabel, escapeHtml as e, icon, initials } from "./ui";
 
 export type NavigationSession = {
   id: string; title: string | null; summary: string | null; project: string;
-  continued_from?: string | null; forked_from?: string | null; forked_from_owner?: string | null;
+  continued_from?: string | null; forked_from?: string | null; forked_from_owner?: string | null; external_app?: string | null;
   repo: string | null; owner_email: string; owner_name: string; msg_count: number; last_synced_at: number;
 };
 export const projectPath = (slug: string) => `/projects/${encodeURIComponent(slug)}`;
@@ -17,6 +17,7 @@ export function sessionRow(s: NavigationSession, projects: ProjectSummary[], ema
   const p = projects.find((project) => project.slug === s.project);
   const name = s.owner_name || s.owner_email;
   return `<article class="session-row"><div><a class="session-title" href="${e(sessionHref(s.id, returnTo))}">${e(s.title || s.id)}</a>
+    ${s.external_app ? `<p class="session-note"><span class="badge">${e(appName(s.external_app))}</span></p>` : ""}
     ${(inProject ? s.summary : s.repo) ? `<p class="session-note">${e(inProject ? s.summary : s.repo)}</p>` : ""}
     ${s.continued_from || s.forked_from ? `<p class="session-note provenance">${s.continued_from ? "suite d’une session compactée" : ""}${s.continued_from && s.forked_from ? " · " : ""}${s.forked_from ? `fork de la session de ${e(s.forked_from_owner || s.forked_from)}` : ""}</p>` : ""}</div>
     ${inProject ? "" : `<a class="project-chip" href="${e(projectPath(s.project))}">${e(p?.name || s.project)}</a>`}

@@ -7,8 +7,11 @@ import type { RedactionOptions } from "./redact.ts";
 
 // offset/last_line_hash describe the local source; the server holds sanitized bytes, compared by sync.
 export type Entry = { id: string; path: string; offset: number; last_line_hash: string; url: string; strip?: RedactionOptions; project?: string };
+/** A session hosted by another app; the server keeps only its metadata and link. Local cache. */
+export type Relay = { app: string; url: string; expires_at: string | null; project: string };
 type Manifest = {
   sessions: Record<string, Entry>;
+  relays?: Record<string, Relay>;
   forks?: Record<string, { forked_from: string }>;
   /** Compaction continuations already proposed for sharing; presence means "asked once", not consent. */
   continuations?: Record<string, { continued_from: string }>;

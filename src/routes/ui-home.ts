@@ -7,7 +7,7 @@ import { page } from "../ui";
 /** GET / — the most recently synchronized accessible conversations and projects. */
 export async function homePage(_request: Request, env: Env, who: Identity): Promise<Response> {
   const projects = await getProjectSummaries(env, who.email);
-  const { results } = await env.DB.prepare(`SELECT id,title,summary,project,repo,owner_email,owner_name,msg_count,last_synced_at,continued_from,forked_from,forked_from_owner
+  const { results } = await env.DB.prepare(`SELECT id,title,summary,project,repo,owner_email,owner_name,msg_count,last_synced_at,continued_from,forked_from,forked_from_owner,external_app
     FROM sessions WHERE ${VISIBLE} AND ${MEMBER} ORDER BY last_synced_at DESC,id LIMIT 5`)
     .bind(visibleSince(), who.email).all<NavigationSession>();
   const active = projects.filter((p) => p.last_synced_at !== null && p.last_synced_at > Date.now() - 7 * 86400000);
