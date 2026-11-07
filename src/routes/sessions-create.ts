@@ -34,12 +34,13 @@ export async function createSession(request: Request, env: Env, who: Identity): 
   }
 
   // Ownership ignores retention: an expired session still belongs to its owner.
-  const existing = await env.DB.prepare("SELECT owner_email, project, created_at, forked_from, continued_from FROM sessions WHERE id = ?")
+  const existing = await env.DB.prepare("SELECT owner_email, project, created_at, forked_from, continued_from, external_app FROM sessions WHERE id = ?")
     .bind(id)
-    .first<{ owner_email: string; project: string; created_at: number; forked_from: string | null; continued_from: string | null }>();
+    .first<{ owner_email: string; project: string; created_at: number; forked_from: string | null; continued_from: string | null; external_app: string | null }>();
   if (existing && existing.owner_email !== who.email) {
     return Response.json({ error: "forbidden" }, { status: 403 });
   }
+  if (existing?.external_app) return Response.json({ error: `session is relayed from ${existing.external_app}` }, { status: 409 });
   let forkedFrom = existing?.forked_from ?? null;
   if (meta.forked_from !== undefined && meta.forked_from !== null) {
     if (typeof meta.forked_from !== "string" || !UUID.test(meta.forked_from) || meta.forked_from === id) {

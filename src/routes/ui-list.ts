@@ -58,7 +58,7 @@ async function renderList(request: Request, env: Env, who: Identity, slug?: stri
   const requested = Number(params.get("page"));
   const current = Number.isSafeInteger(requested) && requested > 0 && requested <= Math.floor(Number.MAX_SAFE_INTEGER / 100) ? requested : 1;
   const oldest = params.get("sort") === "oldest";
-  const { results } = await env.DB.prepare(`SELECT id,title,summary,project,repo,owner_email,owner_name,msg_count,last_synced_at,continued_from,forked_from,forked_from_owner
+  const { results } = await env.DB.prepare(`SELECT id,title,summary,project,repo,owner_email,owner_name,msg_count,last_synced_at,continued_from,forked_from,forked_from_owner,external_app
     FROM sessions WHERE ${where.join(" AND ")} ORDER BY last_synced_at ${oldest ? "ASC" : "DESC"},id LIMIT 101 OFFSET ?`)
     .bind(...binds, (current - 1) * 100).all<NavigationSession>();
   // Author choices come from the whole live scope, never the current search or page.

@@ -127,6 +127,7 @@ body.is-detail main{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))
 .project-settings .f{display:grid;gap:6px}
 .project-settings [role=alert]{color:hsl(var(--destructive-text));overflow-wrap:anywhere}
 .btn:disabled{opacity:.5;cursor:wait}
+.btn[data-expired]{cursor:not-allowed}
 
 /* Badge shadcn : secondary (tags) / outline (statuts, projet, fork) */
 .chip,.badge{font-size:12px;font-weight:500;line-height:18px;padding:1px 8px;border-radius:calc(var(--radius) - 2px);display:inline-flex;gap:6px;align-items:center;max-width:100%;white-space:nowrap}
@@ -578,6 +579,8 @@ const icons = {
 
 /** SVG paths are static; metadata never enters SVG markup. */
 export const icon = (name: keyof typeof icons) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${icons[name]}</svg>`;
+/** Display name of the app hosting a relayed session. */
+export const appName = (slug: unknown) => ({ t3code: "T3 Code" } as Record<string, string>)[String(slug)] ?? String(slug);
 export const initials = (name: unknown) => String(name || "?").trim().split(/\s+/).slice(0, 2).map((s) => Array.from(s)[0]).join("").toUpperCase();
 export function author(name: unknown, email: unknown): string {
   return `<span class="author"><span class="avatar" aria-hidden="true">${escapeHtml(initials(name || email))}</span><span>${escapeHtml(name)}${name && email ? " · " : ""}${escapeHtml(email)}</span></span>`;

@@ -1,7 +1,10 @@
 import { parseArgs } from "node:util";
 import { api } from "../lib.ts";
 
-type Row = { id: string; title: string | null; project: string; repo: string | null; owner_email: string; last_synced_at: number; msg_count: number };
+type Row = {
+  id: string; title: string | null; project: string; repo: string | null; owner_email: string; last_synced_at: number; msg_count: number;
+  external_app?: string | null; external_url?: string | null; external_expires_at?: number | null;
+};
 
 export async function list(args: string[]): Promise<unknown> {
   const { values } = parseArgs({
@@ -24,5 +27,9 @@ export async function list(args: string[]): Promise<unknown> {
     author: s.owner_email,
     date: new Date(s.last_synced_at).toISOString().slice(0, 16).replace("T", " "),
     messages: s.msg_count,
+    ...(s.external_app ? {
+      app: s.external_app, url: s.external_url,
+      expires: s.external_expires_at == null ? null : new Date(s.external_expires_at).toISOString(),
+    } : {}),
   }));
 }

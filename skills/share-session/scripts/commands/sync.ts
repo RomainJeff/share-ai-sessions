@@ -65,6 +65,8 @@ export async function syncSession(id: string, { path, strip }: { path: string; s
 }
 
 async function syncOne(id: string): Promise<unknown> {
+  // A relayed session has no transcript on the server: nothing to sync.
+  if ((await readManifest()).relays?.[id]) return { id, relayed: true, synced: false };
   const session = await resolveSession(id);
   if (!session && (await readManifest()).stopped?.[id]) throw new ClientError("stopped", "Sync was stopped for this session; only a new consented upload re-enables it");
   if (!session) throw new ClientError("not_found", "No opted-in transcript found; upload it first");
@@ -74,7 +76,8 @@ async function syncOne(id: string): Promise<unknown> {
 export async function sync(args: string[]): Promise<unknown> {
   if (args.length === 1 && args[0] === "--all") {
     const results = [];
-    for (const id of Object.keys((await readManifest()).sessions)) results.push(await syncOne(id));
+    const { sessions, relays } = await readManifest();
+    for (const id of Object.keys(sessions)) if (!relays?.[id]) results.push(await syncOne(id));
     return results;
   }
   if (args.length !== 1 || !UUID.test(args[0]!)) throw new ClientError("usage", "Usage: client.ts sync <id>|--all");

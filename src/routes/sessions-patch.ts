@@ -4,10 +4,11 @@ import { lastLineHash } from "../transcript";
 
 export async function patchSession(request: Request, env: Env, who: Identity, { id }: Record<string, string>): Promise<Response> {
   // Writes can revive an expired session; ownership still applies.
-  const session = await env.DB.prepare("SELECT owner_email, project, bytes, segment_count FROM sessions WHERE id = ?")
-    .bind(id).first<{ owner_email: string; project: string; bytes: number; segment_count: number }>();
+  const session = await env.DB.prepare("SELECT owner_email, project, bytes, segment_count, external_app FROM sessions WHERE id = ?")
+    .bind(id).first<{ owner_email: string; project: string; bytes: number; segment_count: number; external_app: string | null }>();
   if (!session) return Response.json({ error: "not found" }, { status: 404 });
   if (session.owner_email !== who.email) return Response.json({ error: "forbidden" }, { status: 403 });
+  if (session.external_app) return Response.json({ error: `session is relayed from ${session.external_app}` }, { status: 409 });
   if (!atLeast(await roleIn(env, session.project, who.email), "writer")) {
     return Response.json({ error: `writer role required on project ${session.project}` }, { status: 403 });
   }

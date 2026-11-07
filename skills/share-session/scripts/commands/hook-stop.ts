@@ -44,6 +44,7 @@ export async function hookStop(): Promise<void> {
     active = payload.stop_hook_active === true;
     // Manifest only: transcript text is not consent (pasted or tool-read content could carry a marker).
     const manifest = await readManifest();
+    if (manifest.relays?.[id]) return;
     const entry = manifest.sessions[id];
     if (entry) await syncSession(id, { path: entry.path, strip: entry.strip ?? {} });
     else if (!manifest.stopped?.[id] && !manifest.forks?.[id] && !manifest.continuations?.[id]) {

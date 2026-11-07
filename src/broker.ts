@@ -59,6 +59,7 @@ export async function brokerInScope(request: Request, scope: string): Promise<bo
   }
   const id = scope.slice(6);
   if (request.method === "PATCH") return path === `/api/sessions/${id}`;
+  if (request.method === "PUT") return path === `/api/sessions/${id}/relay`;
   if (request.method !== "POST" || path !== "/api/sessions") return false;
   try {
     const form = await request.clone().formData();

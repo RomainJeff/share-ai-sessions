@@ -2,7 +2,7 @@ import { readerLine } from "../../skills/share-session/scripts/transcript";
 import type { Identity } from "../auth";
 import { atLeast, MEMBER, roleIn, VISIBLE, visibleSince } from "../db";
 import { getProjectSummaries } from "../navigation";
-import { author, dateLabel, escapeHtml as e, icon, page } from "../ui";
+import { appName, author, dateLabel, escapeHtml as e, icon, page } from "../ui";
 
 type RecordLine = { type?: string; timestamp?: string; isMeta?: boolean; isCompactSummary?: boolean; toolUseResult?: unknown; message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, number> } };
 
@@ -56,31 +56,8 @@ function renderRow({ raw, data }: TranscriptRecord, harness = "Claude"): string 
     </div></article>`;
 }
 
-/** GET /s/:id — metadata is retention-checked before reading any transcript from R2. */
-export async function sessionDetailPage(request: Request, env: Env, who: Identity, params: Record<string, string>): Promise<Response> {
-  const id = params.id!;
-  const session = await env.DB.prepare(`SELECT * FROM sessions WHERE id = ? AND ${VISIBLE} AND ${MEMBER}`)
-    .bind(id, visibleSince(), who.email).first<Record<string, string | number | null>>();
-  if (!session) return page("Session introuvable", "<h1>Session introuvable</h1>", 404);
-  const projects = await getProjectSummaries(env, who.email);
-  const project = projects.find(p => p.slug === session.project)!;
-  const projectHref = `/projects/${encodeURIComponent(String(session.project))}`;
-  let backHref = projectHref;
-  const returnTo = new URL(request.url).searchParams.get("return");
-  if (returnTo?.startsWith("/") && !returnTo.startsWith("//")) {
-    const origin = new URL(request.url).origin;
-    try {
-      const target = new URL(returnTo, origin);
-      // Return only to a membership-filtered list or this session's own project.
-      if (target.origin === origin && (target.pathname === "/sessions" || target.pathname === projectHref)) {
-        backHref = target.pathname + target.search;
-      }
-    } catch { /* Fall back to the session's current project for malformed links. */ }
-  }
-
-  const continuation = await env.DB.prepare(`SELECT id FROM sessions WHERE continued_from = ? AND ${VISIBLE} AND ${MEMBER} ORDER BY created_at DESC LIMIT 1`)
-    .bind(id, visibleSince(), who.email).first<{ id: string }>();
-
+/** Reader rendering of a hosted transcript, or null when a segment is missing. */
+async function readConversation(env: Env, id: string) {
   // T02 stores plain JSONL; also read the gzip segments used by incremental sync.
   const keys: string[] = [];
   let cursor: string | undefined;
@@ -89,11 +66,11 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
     keys.push(...listed.objects.map((o) => o.key).filter((k) => /\/seg-\d+\.jsonl(?:\.gz)?$/.test(k)));
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
-  if (!keys.length) return page("Transcript indisponible", "<h1>Transcript indisponible</h1>", 503);
+  if (!keys.length) return null;
   let jsonl = "";
   for (const key of keys.sort()) {
     const object = await env.SESSIONS.get(key);
-    if (!object) return page("Transcript indisponible", "<h1>Transcript indisponible</h1>", 503);
+    if (!object) return null;
     jsonl += key.endsWith(".gz") ? await new Response(object.body.pipeThrough(new DecompressionStream("gzip"))).text() : await object.text();
   }
   const harness = jsonl.split("\n").some(raw => { try { return JSON.parse(raw).type === "session_meta"; } catch { return false; } }) ? "Codex" : "Claude";
@@ -140,6 +117,39 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
     }
     if (final >= 0) conversation += renderRow(records[final]!, harness);
   }
+  return { harness, records, invalid, usages, tokens, conversation };
+}
+
+/** GET /s/:id — metadata is retention-checked before reading any transcript from R2. */
+export async function sessionDetailPage(request: Request, env: Env, who: Identity, params: Record<string, string>): Promise<Response> {
+  const id = params.id!;
+  const session = await env.DB.prepare(`SELECT * FROM sessions WHERE id = ? AND ${VISIBLE} AND ${MEMBER}`)
+    .bind(id, visibleSince(), who.email).first<Record<string, string | number | null>>();
+  if (!session) return page("Session introuvable", "<h1>Session introuvable</h1>", 404);
+  const projects = await getProjectSummaries(env, who.email);
+  const project = projects.find(p => p.slug === session.project)!;
+  const projectHref = `/projects/${encodeURIComponent(String(session.project))}`;
+  let backHref = projectHref;
+  const returnTo = new URL(request.url).searchParams.get("return");
+  if (returnTo?.startsWith("/") && !returnTo.startsWith("//")) {
+    const origin = new URL(request.url).origin;
+    try {
+      const target = new URL(returnTo, origin);
+      // Return only to a membership-filtered list or this session's own project.
+      if (target.origin === origin && (target.pathname === "/sessions" || target.pathname === projectHref)) {
+        backHref = target.pathname + target.search;
+      }
+    } catch { /* Fall back to the session's current project for malformed links. */ }
+  }
+
+  const continuation = await env.DB.prepare(`SELECT id FROM sessions WHERE continued_from = ? AND ${VISIBLE} AND ${MEMBER} ORDER BY created_at DESC LIMIT 1`)
+    .bind(id, visibleSince(), who.email).first<{ id: string }>();
+
+  // A relayed session has no transcript: nothing is read from R2.
+  const transcript = session.external_app ? { harness: "Claude", records: [] as TranscriptRecord[], invalid: 0, usages: new Map<string, Record<string, number>>(), tokens: 0, conversation: "" }
+    : await readConversation(env, id);
+  if (!transcript) return page("Transcript indisponible", "<h1>Transcript indisponible</h1>", 503);
+  const { harness, records, invalid, usages, tokens, conversation } = transcript;
   const sourceRole = await roleIn(env, String(session.project), who.email);
   const canMove = sourceRole === "owner" || (session.owner_email === who.email && atLeast(sourceRole, "writer"));
   const destinations = canMove ? (await env.DB.prepare(`SELECT p.slug, p.name FROM projects p
@@ -154,13 +164,20 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
       <p role="alert" data-move-error hidden></p><button class="btn" type="submit" disabled>Déplacer la session</button>
     </form></div></details>` : "";
   const command = `/share-session pull ${id}`;
+  const app = session.external_app ? appName(session.external_app) : null;
+  const expires = session.external_expires_at === null ? null : Number(session.external_expires_at);
+  const expired = expires !== null && expires <= Date.now();
+  const action = !app ? `<button class="btn primary" type="button" data-copy="${e(command)}">${icon("branch")}Reprendre</button>`
+    : expired ? '<button class="btn primary" type="button" disabled data-expired>Lien expiré</button>'
+    : `<a class="btn primary" href="${e(session.external_url)}" target="_blank" rel="noopener noreferrer">${icon("chat")}Ouvrir dans ${e(app)}</a>`;
   const model = session.model || records.find((r) => r.data.message?.model)?.data.message?.model;
   const meta = (label: string, value: unknown, mono = false) => value == null || value === "" ? "" : `<dt>${label}</dt><dd${mono ? ' class="mono"' : ""}>${e(value)}</dd>`;
   return page(String(session.title || id), `<div class="detail">
     <header class="dhead"><h1>${e(session.title || id)}</h1>
-      <details class="hmeta" data-meta open><summary>${icon("chev")}Détails · ${tokens} tokens · ${records.length} messages</summary>
+      <details class="hmeta" data-meta open><summary>${icon("chev")}Détails${app ? "" : ` · ${tokens} tokens · ${records.length} messages`}</summary>
       ${session.summary ? `<p class="sum">${e(session.summary)}</p>` : ""}
       <div class="line">${author(session.owner_name, session.owner_email)}
+        ${app ? `<span class="badge">${e(app)}</span>` : ""}
         <span class="badge">synchro ${dateLabel(Number(session.last_synced_at), true)}</span>
         <span class="badge mono">${icon("folder")}${e(session.project)}</span>
         ${session.repo ? `<span class="badge mono">${icon("term")}${e(session.repo)}</span>` : ""}
@@ -170,9 +187,9 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
         ${continuation ? `<span class="badge">${icon("branch")}suite dans <a href="/s/${e(encodeURIComponent(String(continuation.id)))}">${e(continuation.id)}</a></span>` : ""}
         ${session.forked_from ? `<span class="badge">${icon("branch")}forké depuis <a href="/s/${e(encodeURIComponent(String(session.forked_from)))}">${e(session.forked_from)}</a> · ${e(session.forked_from_owner)}</span>` : ""}
       </div>
-      <p class="hint">${tokens} tokens · ${records.length} messages</p></details>
-      ${session.owner_email !== who.email ? `<p class="ro-note">Lecture seule : session de ${e(session.owner_email)}. Si vous la reprenez, la copie sera à votre nom.</p>` : ""}
-      <div class="actionbar gutter"><div class="in"><button class="btn primary" type="button" data-copy="${e(command)}">${icon("branch")}Reprendre</button></div></div>
+      ${app ? "" : `<p class="hint">${tokens} tokens · ${records.length} messages</p>`}</details>
+      ${session.owner_email !== who.email && !app ? `<p class="ro-note">Lecture seule : session de ${e(session.owner_email)}. Si vous la reprenez, la copie sera à votre nom.</p>` : ""}
+      <div class="actionbar gutter"><div class="in">${action}</div></div>
     </header>
     <aside class="side" aria-label="Informations de la session">
       <details class="panel" data-meta open><summary>Informations<span class="tchev">${icon("chev")}</span></summary><div class="pb"><dl class="meta">
@@ -181,19 +198,20 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
         <dt>Créée</dt><dd>${dateLabel(Number(session.created_at))}</dd>
         <dt>Mise à jour</dt><dd>${dateLabel(Number(session.updated_at))}</dd>
         <dt>Dernière synchro</dt><dd>${dateLabel(Number(session.last_synced_at))}</dd>
-        ${meta("Messages", records.length)}${meta("Tokens", tokens)}${meta("Réponses API", usages.size)}${meta("Taille", `${Number(session.bytes)} octets`)}${meta("Identifiant", id, true)}
+        ${app ? `${meta("Messages", session.msg_count || null)}${meta("Hébergée par", app)}${expires === null ? "" : `<dt>Lien valable jusqu’au</dt><dd>${dateLabel(expires)}</dd>`}`
+          : `${meta("Messages", records.length)}${meta("Tokens", tokens)}${meta("Réponses API", usages.size)}${meta("Taille", `${Number(session.bytes)} octets`)}`}${meta("Identifiant", id, true)}
       </dl></div></details>
-      <details class="panel"><summary>Commande de reprise<span class="tchev">${icon("chev")}</span></summary><div class="pb resume-help">
+      ${app ? "" : `<details class="panel"><summary>Commande de reprise<span class="tchev">${icon("chev")}</span></summary><div class="pb resume-help">
         <p class="hint">Collez cette commande dans Claude Code ou Codex, ouvert dans votre copie de <span class="mono">${e(session.repo || session.project)}</span>.</p>
         <div class="cmd"><code id="resume-command">${e(command)}</code></div>
         <p class="hint">La copie sera une nouvelle session à votre nom. Celle-ci reste intacte.</p>
-      </div></details>
+      </div></details>`}
       ${movePanel}
     </aside>
-    <section class="chat transcript" id="conversation" tabindex="0" aria-label="Conversation"><h2 class="chat-title">Conversation</h2>
+    ${app ? "" : `<section class="chat transcript" id="conversation" tabindex="0" aria-label="Conversation"><h2 class="chat-title">Conversation</h2>
       ${invalid ? `<p class="ro-note">${invalid} ligne(s) JSONL invalide(s) ignorée(s).</p>` : ""}
       ${conversation || '<p class="empty">Aucun message.</p>'}
-    </section></div>`, 200, true, {
+    </section>`}</div>`, 200, true, {
       active: "projects", projects, email: who.email, currentProject: String(session.project), backHref,
       backLabel: backHref.startsWith("/sessions") ? "Toutes les sessions" : project?.name || String(session.project),
       breadcrumbs: [
