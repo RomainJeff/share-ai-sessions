@@ -1,12 +1,12 @@
 import type { Identity } from "../auth";
-import { atLeast, MEMBER, SLUG, VISIBLE, visibleSince, type Role } from "../db";
+import { atLeast, MEMBER, SLUG, statusFilter, VISIBLE, visibleSince, type Role } from "../db";
 import { getProjectSummaries, type ProjectSummary } from "../navigation";
 import { activityNote, folder, groupedSessions, projectPath, roleLabel, type NavigationSession } from "../navigation-render";
 import { dateLabel, escapeHtml as e, icon, page } from "../ui";
 
 type ProjectMember = { email: string; role: Role };
 
-const FILTERS = ["project", "repo", "author", "mine", "q", "from", "to"];
+const FILTERS = ["project", "repo", "author", "mine", "q", "from", "to", "status"];
 const notFound = () => page("Projet introuvable", "<h1>Projet introuvable</h1>", 404);
 const selected = (value: string | null, option: string) => value === option ? " selected" : "";
 
@@ -44,6 +44,8 @@ async function renderList(request: Request, env: Env, who: Identity, slug?: stri
   if (owner) { where.push("owner_email = ?"); binds.push(owner); }
   const q = params.get("q");
   if (q) { where.push("(title LIKE ? OR summary LIKE ?)"); binds.push(`%${q}%`, `%${q}%`); }
+  const status = statusFilter(params.get("status"));
+  if (status) where.push(status);
   for (const name of ["from", "to"]) {
     const value = params.get(name);
     if (!value) continue;
@@ -58,7 +60,7 @@ async function renderList(request: Request, env: Env, who: Identity, slug?: stri
   const requested = Number(params.get("page"));
   const current = Number.isSafeInteger(requested) && requested > 0 && requested <= Math.floor(Number.MAX_SAFE_INTEGER / 100) ? requested : 1;
   const oldest = params.get("sort") === "oldest";
-  const { results } = await env.DB.prepare(`SELECT id,title,summary,project,repo,owner_email,owner_name,msg_count,last_synced_at,continued_from,forked_from,forked_from_owner,external_app
+  const { results } = await env.DB.prepare(`SELECT id,title,summary,project,repo,owner_email,owner_name,msg_count,last_synced_at,continued_from,forked_from,forked_from_owner,external_app,done_at
     FROM sessions WHERE ${where.join(" AND ")} ORDER BY last_synced_at ${oldest ? "ASC" : "DESC"},id LIMIT 101 OFFSET ?`)
     .bind(...binds, (current - 1) * 100).all<NavigationSession>();
   // Author choices come from the whole live scope, never the current search or page.
@@ -84,6 +86,7 @@ async function renderList(request: Request, env: Env, who: Identity, slug?: stri
     ${total || filtered ? `<form method="get" action="${e(path)}" aria-label="Rechercher et filtrer les sessions">
       <div class="toolbar"><label class="searchbox">${icon("search")}<input name="q" type="search" aria-label="Titre ou résumé" placeholder="${project ? "Rechercher dans ce projet…" : "Rechercher une session…"}" value="${e(q)}"></label>
       <select class="field" name="author" aria-label="Filtrer par auteur"${mine ? " disabled" : ""}><option value="">Tous les auteurs</option>${authors.map((a) => `<option value="${e(a.owner_email)}"${selected(params.get("author"), a.owner_email)}>${e(a.owner_name || a.owner_email)}</option>`).join("")}${params.get("author") && !authors.some((a) => a.owner_email === params.get("author")) ? `<option value="${e(params.get("author"))}" selected>${e(params.get("author"))}</option>` : ""}</select>
+      <select class="field" name="status" aria-label="Filtrer par statut"><option value="">Tous les statuts</option><option value="active"${selected(params.get("status"), "active")}>En cours</option><option value="done"${selected(params.get("status"), "done")}>Terminées</option></select>
       <select class="field" name="sort" aria-label="Trier par activité"><option value="recent"${!oldest ? " selected" : ""}>Activité la plus récente</option><option value="oldest"${oldest ? " selected" : ""}>Activité la plus ancienne</option></select>
       ${mine ? '<input type="hidden" name="mine" value="1">' : ""}<button class="btn" type="submit">Rechercher</button>
       <div class="segmented" aria-label="Sessions affichées"><a href="${e(href({ mine: null }))}"${!mine ? ' class="active" aria-current="true"' : ""}>Toutes</a><a href="${e(href({ mine: "1", author: null }))}"${mine ? ' class="active" aria-current="true"' : ""}>À moi</a></div></div>

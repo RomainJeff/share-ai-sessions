@@ -9,6 +9,7 @@ import { sessionDetailPage } from "./routes/ui-detail";
 import { moveSession } from "./routes/sessions-project";
 import { patchSession } from "./routes/sessions-patch";
 import { relaySession } from "./routes/sessions-relay";
+import { setSessionStatus } from "./routes/sessions-status";
 import { getSession } from "./routes/sessions-get";
 import { sessionBundle } from "./routes/sessions-bundle";
 import { skillDownload } from "./routes/skill-download";
@@ -38,6 +39,7 @@ const allSessionsPage: Handler = (request, env, who) => Promise.resolve(legacyLi
 const ROUTES: [method: string, pattern: URLPattern, handler: Handler][] = [
   ["PUT", new URLPattern({ pathname: "/api/sessions/:id/project" }), moveSession],
   ["PUT", new URLPattern({ pathname: "/api/sessions/:id/relay" }), relaySession],
+  ["PUT", new URLPattern({ pathname: "/api/sessions/:id/status" }), setSessionStatus],
   ["PATCH", new URLPattern({ pathname: "/api/sessions/:id" }), patchSession],
   ["GET", new URLPattern({ pathname: "/api/sessions/:id" }), getSession],
   ["GET", new URLPattern({ pathname: "/api/sessions/:id/bundle" }), sessionBundle],

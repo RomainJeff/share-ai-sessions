@@ -107,7 +107,7 @@ test("sync, hook-stop and upload skip or refuse a relayed id; stop forgets it; l
       ? Response.json({ error: `session is relayed from t3code: no transcript is stored here, open ${LINK}` }, { status: 409 })
       : Response.json({ sessions: [{ id: f.id, title: null, project: "team", repo: "", owner_email: "alice@example.com", last_synced_at: 0, msg_count: 0, external_app: "t3code", external_url: LINK, external_expires_at: null }] }));
     await assert.rejects(main(["pull", f.id]), (error: any) => error.code === "relayed" && error.message.includes(LINK));
-    assert.deepEqual(await main(["list"]), [{ id: f.id.slice(0, 8), title: null, project: "team", repo: null, author: "alice@example.com", date: "1970-01-01 00:00", messages: 0, app: "t3code", url: LINK, expires: null }]);
+    assert.deepEqual(await main(["list"]), [{ id: f.id.slice(0, 8), title: null, project: "team", repo: null, author: "alice@example.com", date: "1970-01-01 00:00", messages: 0, done: null, app: "t3code", url: LINK, expires: null }]);
 
     assert.deepEqual(await main(["stop", f.id]), { id: f.id, stopped: true, marker: `share-session:opt-out ${f.id}` });
     const manifest = await f.manifest();

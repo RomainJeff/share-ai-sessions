@@ -1,13 +1,12 @@
 import type { Identity } from "../auth";
-import { atLeast, MEMBER, roleIn, SLUG, VISIBLE, visibleSince } from "../db";
+import { atLeast, canManageSession, MEMBER, roleIn, SLUG, VISIBLE, visibleSince } from "../db";
 
 /** PUT /api/sessions/:id/project — explicit move; uploads never change a project's assignment. */
 export async function moveSession(request: Request, env: Env, who: Identity, { id }: Record<string, string>): Promise<Response> {
   const session = await env.DB.prepare(`SELECT project, owner_email FROM sessions WHERE id = ? AND ${VISIBLE} AND ${MEMBER}`)
     .bind(id, visibleSince(), who.email).first<{ project: string; owner_email: string }>();
   if (!session) return Response.json({ error: "session not found" }, { status: 404 });
-  const sourceRole = await roleIn(env, session.project, who.email);
-  if (sourceRole !== "owner" && !(session.owner_email === who.email && atLeast(sourceRole, "writer"))) {
+  if (!canManageSession(await roleIn(env, session.project, who.email), session.owner_email, who.email)) {
     return Response.json({ error: "session author with writer role or source project owner required" }, { status: 403 });
   }
   let project: string;

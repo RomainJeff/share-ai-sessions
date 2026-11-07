@@ -1,10 +1,10 @@
 import type { Identity } from "../auth";
-import { MEMBER, VISIBLE, visibleSince } from "../db";
+import { MEMBER, statusFilter, VISIBLE, visibleSince } from "../db";
 
 const COLUMNS =
-  "id, owner_email, owner_name, project, repo, branch, title, summary, model, cc_version, msg_count, bytes, created_at, updated_at, last_synced_at, external_app, external_url, external_expires_at";
+  "id, owner_email, owner_name, project, repo, branch, title, summary, model, cc_version, msg_count, bytes, created_at, updated_at, last_synced_at, external_app, external_url, external_expires_at, done_at";
 
-/** GET /api/sessions?project=&repo=&author=&mine=1&q= — newest first, retention- and membership-filtered. */
+/** GET /api/sessions?project=&repo=&author=&mine=1&q=&status=active|done — newest first, retention- and membership-filtered. */
 export async function listSessions(request: Request, env: Env, who: Identity): Promise<Response> {
   const params = new URL(request.url).searchParams;
   const where = [VISIBLE, MEMBER];
@@ -18,6 +18,8 @@ export async function listSessions(request: Request, env: Env, who: Identity): P
   if (author) (where.push("owner_email = ?"), binds.push(author));
   const q = params.get("q");
   if (q) (where.push("(title LIKE ? OR summary LIKE ?)"), binds.push(`%${q}%`, `%${q}%`));
+  const status = statusFilter(params.get("status"));
+  if (status) where.push(status);
 
   // ponytail: fixed page of 100, add a cursor when someone has more than 100 live sessions.
   const { results } = await env.DB.prepare(

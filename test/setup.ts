@@ -5,11 +5,12 @@ import migration from "../migrations/0001_sessions.sql?raw";
 import continuationMigration from "../migrations/0003_continuations.sql?raw";
 import projectsMigration from "../migrations/0004_projects.sql?raw";
 import relayedMigration from "../migrations/0005_relayed.sql?raw";
+import statusMigration from "../migrations/0006_status.sql?raw";
 import { ALICE, BOB } from "./jwt";
 
 // Apply the schema migrations in order in the isolated local D1 instance.
 beforeAll(async () => {
-  for (const stmt of [migration, syncMigration, continuationMigration, projectsMigration, relayedMigration].join(";\n").split(";").map((s) => s.trim()).filter((s) => s && !/^--[^\n]*$/.test(s))) {
+  for (const stmt of [migration, syncMigration, continuationMigration, projectsMigration, relayedMigration, statusMigration].join(";\n").split(";").map((s) => s.trim()).filter((s) => s && !/^--[^\n]*$/.test(s))) {
     await env.DB.prepare(stmt).run();
   }
   // Shared project most tests upload into; projects.test.ts covers the rights themselves.

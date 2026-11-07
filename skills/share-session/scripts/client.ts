@@ -12,6 +12,7 @@ import { hookStop } from "./commands/hook-stop.ts";
 import { move } from "./commands/move.ts";
 import { project } from "./commands/project.ts";
 import { relay } from "./commands/relay.ts";
+import { status } from "./commands/status.ts";
 import { ClientError } from "./lib.ts";
 
 // One line per command; each command lives in its own file under commands/.
@@ -25,6 +26,7 @@ const COMMANDS: Record<string, (args: string[]) => Promise<unknown>> = {
   project: (args) => project(args),
   move: (args) => move(args),
   relay: (args) => relay(args),
+  status: (args) => status(args),
   "hook-stop": () => hookStop(),
 };
 
