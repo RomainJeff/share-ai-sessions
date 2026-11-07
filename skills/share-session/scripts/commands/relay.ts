@@ -7,7 +7,7 @@ import { detectRepo } from "../repo.ts";
 import { readMeta } from "./upload.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const USAGE = "Usage: client.ts relay <id> --app <slug> --url <https url> [--expires <ISO date>] [--project <slug>] [--transcript <path.jsonl>]";
+const USAGE = "Usage: client.ts relay <id> --app <slug> --url <https url> [--expires <ISO date>] [--project <slug>] [--transcript <path.jsonl>] [--title <text>]";
 
 /** Metadata only, redacted like an upload's. The transcript itself never leaves the machine. */
 async function transcriptMeta(path: string): Promise<Record<string, unknown>> {
@@ -30,7 +30,7 @@ export async function relay(args: string[]): Promise<unknown> {
   try {
     parsed = parseArgs({ args, allowPositionals: true, options: {
       app: { type: "string" }, url: { type: "string" }, expires: { type: "string" },
-      project: { type: "string" }, transcript: { type: "string" },
+      project: { type: "string" }, transcript: { type: "string" }, title: { type: "string" },
     } });
   } catch {
     throw new ClientError("usage", USAGE);
@@ -53,7 +53,9 @@ export async function relay(args: string[]): Promise<unknown> {
     throw new ClientError("project_required", "Pick a project: --project <slug> (client.ts project list, or project create <slug>)");
   }
 
-  const meta = typeof values.transcript === "string" ? await transcriptMeta(values.transcript) : {};
+  const meta: Record<string, unknown> = typeof values.transcript === "string" ? await transcriptMeta(values.transcript) : {};
+  // The hosting app usually names the session better than its first prompt.
+  if (typeof values.title === "string" && values.title.trim()) meta.title = JSON.parse(redactJsonl(JSON.stringify({ title: values.title.trim() })).jsonl).title;
   const result = await api(`/api/sessions/${id}/relay`, {
     method: "PUT", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...meta, app, url, expires_at: expiresAt, ...(project ? { project } : {}) }),

@@ -78,6 +78,10 @@ test("relay sends redacted metadata and the link, never the transcript, and rene
     });
     assert.deepEqual((await f.manifest()).relays[f.id], { app: "t3code", url: LINK, expires_at: "2030-01-02T03:04:05.000Z", project: "team" });
 
+    await main(["relay", f.id, "--app", "t3code", "--url", LINK, "--transcript", f.transcript, "--title", "Thread name sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789"]);
+    const renamed = JSON.parse(f.calls.at(-1)!.body!);
+    assert.match(renamed.title, /^Thread name \[REDACTED/);
+
     await main(["relay", f.id, "--app", "t3code", "--url", `${LINK}-renewed`]);
     assert.deepEqual(JSON.parse(f.calls.at(-1)!.body!), { app: "t3code", url: `${LINK}-renewed`, expires_at: null });
     assert.equal((await f.manifest()).relays[f.id].url, `${LINK}-renewed`);
