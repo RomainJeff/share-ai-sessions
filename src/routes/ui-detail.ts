@@ -1,6 +1,6 @@
 import { readerLine } from "../../skills/share-session/scripts/transcript";
 import type { Identity } from "../auth";
-import { atLeast, MEMBER, roleIn, VISIBLE, visibleSince } from "../db";
+import { canManageSession, MEMBER, roleIn, VISIBLE, visibleSince } from "../db";
 import { getProjectSummaries } from "../navigation";
 import { appName, author, dateLabel, escapeHtml as e, icon, page } from "../ui";
 
@@ -150,9 +150,8 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
     : await readConversation(env, id);
   if (!transcript) return page("Transcript indisponible", "<h1>Transcript indisponible</h1>", 503);
   const { harness, records, invalid, usages, tokens, conversation } = transcript;
-  const sourceRole = await roleIn(env, String(session.project), who.email);
-  const canMove = sourceRole === "owner" || (session.owner_email === who.email && atLeast(sourceRole, "writer"));
-  const destinations = canMove ? (await env.DB.prepare(`SELECT p.slug, p.name FROM projects p
+  const canManage = canManageSession(await roleIn(env, String(session.project), who.email), String(session.owner_email), who.email);
+  const destinations = canManage ? (await env.DB.prepare(`SELECT p.slug, p.name FROM projects p
     JOIN project_members m ON m.project = p.slug WHERE m.email = lower(?) AND m.role IN ('owner', 'writer') AND p.slug != ? ORDER BY p.name`)
     .bind(who.email, session.project).all<{ slug: string; name: string }>()).results : [];
   const movePanel = destinations.length ? `<details class="panel"><summary>Changer de projet<span class="tchev">${icon("chev")}</span></summary>
@@ -170,6 +169,8 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
   const action = !app ? `<button class="btn primary" type="button" data-copy="${e(command)}">${icon("branch")}Reprendre</button>`
     : expired ? '<button class="btn primary" type="button" disabled data-expired>Lien expiré</button>'
     : `<a class="btn primary" href="${e(session.external_url)}" target="_blank" rel="noopener noreferrer">${icon("chat")}Ouvrir dans ${e(app)}</a>`;
+  const done = session.done_at !== null;
+  const statusButton = canManage ? `<button class="btn" type="button" data-session-status="${e(id)}" data-status="${done ? "active" : "done"}" disabled>${done ? "Rouvrir" : "Marquer terminée"}</button>` : "";
   const model = session.model || records.find((r) => r.data.message?.model)?.data.message?.model;
   const meta = (label: string, value: unknown, mono = false) => value == null || value === "" ? "" : `<dt>${label}</dt><dd${mono ? ' class="mono"' : ""}>${e(value)}</dd>`;
   return page(String(session.title || id), `<div class="detail">
@@ -178,6 +179,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
       ${session.summary ? `<p class="sum">${e(session.summary)}</p>` : ""}
       <div class="line">${author(session.owner_name, session.owner_email)}
         ${app ? `<span class="badge">${e(app)}</span>` : ""}
+        ${done ? '<span class="badge">Terminée</span>' : ""}
         <span class="badge">synchro ${dateLabel(Number(session.last_synced_at), true)}</span>
         <span class="badge mono">${icon("folder")}${e(session.project)}</span>
         ${session.repo ? `<span class="badge mono">${icon("term")}${e(session.repo)}</span>` : ""}
@@ -189,7 +191,8 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
       </div>
       ${app ? "" : `<p class="hint">${tokens} tokens · ${records.length} messages</p>`}</details>
       ${session.owner_email !== who.email && !app ? `<p class="ro-note">Lecture seule : session de ${e(session.owner_email)}. Si vous la reprenez, la copie sera à votre nom.</p>` : ""}
-      <div class="actionbar gutter"><div class="in">${action}</div></div>
+      ${statusButton ? '<p class="ro-note" role="alert" data-status-error hidden></p>' : ""}
+      <div class="actionbar gutter"><div class="in">${action}${statusButton}</div></div>
     </header>
     <aside class="side" aria-label="Informations de la session">
       <details class="panel" data-meta open><summary>Informations<span class="tchev">${icon("chev")}</span></summary><div class="pb"><dl class="meta">

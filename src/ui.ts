@@ -715,6 +715,23 @@ if(moveForm){
     finally{button.disabled=false;}
   });
 }
+const statusButton=document.querySelector('[data-session-status]');
+if(statusButton){
+  const error=document.querySelector('[data-status-error]');
+  statusButton.disabled=false;
+  statusButton.addEventListener('click',async()=>{
+    statusButton.disabled=true;
+    error.hidden=true;
+    try{
+      const response=await fetch('/api/sessions/'+encodeURIComponent(statusButton.dataset.sessionStatus)+'/status',{
+        method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:statusButton.dataset.status})
+      });
+      if(!response.ok){const result=await response.json();throw new Error(result.error||'Modification impossible.');}
+      window.location.reload();
+    }catch(reason){error.textContent=reason instanceof Error?reason.message:'Modification impossible. Réessayez.';error.hidden=false;}
+    finally{statusButton.disabled=false;}
+  });
+}
 const projectSettings=document.querySelector('[data-project]');
 if(projectSettings){
   const error=projectSettings.querySelector('[data-project-error]');

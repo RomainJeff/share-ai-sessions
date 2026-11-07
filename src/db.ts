@@ -12,6 +12,14 @@ const RANK: Record<Role, number> = { reader: 1, writer: 2, owner: 3 };
 export const atLeast = (role: Role | null, min: Role) => role !== null && RANK[role] >= RANK[min];
 export const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 
+/** Moving a session or changing its status: its author with writer rights on its project, or an owner of that project. */
+export const canManageSession = (role: Role | null, author: string, email: string) =>
+  role === "owner" || (author === email && atLeast(role, "writer"));
+
+/** `status=active|done` list filter; any other value lists both. */
+export const statusFilter = (status: string | null) =>
+  status === "active" ? "done_at IS NULL" : status === "done" ? "done_at IS NOT NULL" : null;
+
 /** Reads add `AND ${MEMBER}` bound to the caller's email: a session outside your projects does not exist for you. */
 export const MEMBER = "project IN (SELECT project FROM project_members WHERE email = lower(?))";
 

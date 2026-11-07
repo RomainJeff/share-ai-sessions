@@ -1,6 +1,6 @@
 # Share AI Sessions
 
-Share Claude Code and Codex session transcripts with your team: upload, sync, browse by project, and resume a session in either harness. A session already hosted by another app (e.g. a T3 Code guest link) can be relayed instead: it is listed with its metadata and opens in that app, with no transcript stored. A Cloudflare Worker (R2 + D1) behind Cloudflare Access serves the reader and the API; the `share-session` skill is the client.
+Share Claude Code and Codex session transcripts with your team: upload, sync, browse by project, mark sessions done, and resume a session in either harness. A session already hosted by another app (e.g. a T3 Code guest link) can be relayed instead: it is listed with its metadata and opens in that app, with no transcript stored. A Cloudflare Worker (R2 + D1) behind Cloudflare Access serves the reader and the API; the `share-session` skill is the client.
 
 [![Video: share a Claude Code session, then a teammate resumes and forks it in Codex (47 s, with voiceover)](docs/images/video-poster.png)](docs/video/share-session-flow.mp4)
 
