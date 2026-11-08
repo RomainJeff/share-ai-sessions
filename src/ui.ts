@@ -1,4 +1,4 @@
-import type { ProjectSummary } from "./navigation";
+import type { ProjectSummary, SidebarSession } from "./navigation";
 
 export type NavigationOptions = {
   active: "home" | "projects" | "sessions";
@@ -8,6 +8,9 @@ export type NavigationOptions = {
   backHref?: string;
   backLabel?: string;
   currentProject?: string;
+  /** In-progress sessions listed in the sidebar; omitted on pages that do not load them. */
+  sidebar?: SidebarSession[];
+  currentSession?: string;
 };
 
 /** All transcript and metadata values enter HTML through this text/attribute escape. */
@@ -420,38 +423,74 @@ body.has-js .filters:not([open]){display:none}
 body.has-navigation{
   --nav-side:#f7f7f9;--nav-soft:#f5f5f7;--nav-ink:#212126;--nav-muted:#71717c;
   --nav-line:#e9e9ee;--nav-hover:#fafafd;--nav-accent:#6e56b5;--nav-accent-soft:#f0ecfa;--nav-good:#368066;
+  --nav-tab:#ececf1;--nav-tab-on:#ffffff;--nav-av:#e2e2e8;
   --foreground:240 7% 14%;--muted-foreground:240 5% 47%;--border:240 14% 92%;
   --f-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  --mobile-nav-height:calc(65px + env(safe-area-inset-bottom,0px));color:var(--nav-ink)
+  --mobile-nav-height:env(safe-area-inset-bottom,0px);color:var(--nav-ink)
 }
 @media(prefers-color-scheme:dark){body.has-navigation{
   --background:240 6% 10%;--card:240 6% 10%;--foreground:240 9% 94%;--muted:240 5% 15%;
   --muted-foreground:240 6% 68%;--border:240 6% 20%;--input:240 6% 20%;
   --nav-side:#141417;--nav-soft:#252529;--nav-ink:#ededf0;--nav-muted:#aaaab5;
-  --nav-line:#303036;--nav-hover:#222226;--nav-accent:#b7a1ef;--nav-accent-soft:#30283f;--nav-good:#7dbea5
+  --nav-line:#303036;--nav-hover:#222226;--nav-accent:#b7a1ef;--nav-accent-soft:#30283f;--nav-good:#7dbea5;
+  --nav-tab:#232327;--nav-tab-on:#34343a;--nav-av:#34343a
 }}
-.has-navigation .shell{min-height:100dvh;display:grid;grid-template-columns:226px minmax(0,1fr)}
-.has-navigation .sidebar{position:sticky;top:0;height:100dvh;overflow-y:auto;background:var(--nav-side);border-right:1px solid var(--nav-line);padding:25px 15px 16px;display:flex;flex-direction:column}
-.has-navigation .sidebar .brand{display:flex;gap:11px;padding:0 10px;margin-bottom:30px;font-size:16px;font-weight:650;letter-spacing:-.4px}
+.has-navigation .shell{min-height:100dvh;display:grid;grid-template-columns:288px minmax(0,1fr)}
+.has-navigation .sidebar{position:sticky;top:0;height:100dvh;overflow-y:auto;background:var(--nav-side);border-right:1px solid var(--nav-line);padding:16px 12px 14px;display:flex;flex-direction:column;gap:14px}
+.has-navigation .side-head{display:flex;align-items:center;gap:8px;padding-left:5px}
+.has-navigation .sidebar .brand{display:flex;align-items:center;gap:10px;flex:1;min-height:36px;font-size:15px;font-weight:650;letter-spacing:-.3px}
 .has-navigation .brand-icon{height:29px;width:29px;border:1px solid var(--nav-line);border-radius:9px;background:hsl(var(--background));display:grid;place-items:center}
 .has-navigation .brand-icon svg{width:17px}
-.has-navigation .nav{display:grid;gap:5px}
-.has-navigation .nav a{padding:10px 11px;border-radius:7px;display:flex;gap:11px;align-items:center;color:var(--nav-muted);font-weight:500;font-size:13px;min-height:44px}
-.has-navigation .nav a:hover{background:var(--nav-soft);color:var(--nav-ink)}
-.has-navigation .nav a[aria-current=page]{background:var(--nav-accent-soft);color:var(--nav-accent)}
-.has-navigation .side-section{margin-top:31px}
-.has-navigation .side-label{display:flex;align-items:center;justify-content:space-between;margin:0 10px 9px;font-size:11px;color:var(--nav-muted);font-weight:550}
-.has-navigation .side-label a{padding:6px 0}
-.has-navigation .side-project{display:flex;align-items:center;gap:10px;border-radius:7px;padding:9px 11px;min-height:44px;font-size:13px;min-width:0}
-.has-navigation .side-project:hover,.has-navigation .side-project.selected{background:var(--nav-soft)}
-.has-navigation .side-project .project-name{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.has-navigation .side-project .count{margin-left:auto;font-size:11px}
 .has-navigation .project-dot{height:8px;width:8px;border-radius:3px;flex:none;background:var(--tone,var(--nav-accent))}
 .has-navigation .violet{--tone:#8470bc;--tint:#f1edf9}.has-navigation .blue{--tone:#5987aa;--tint:#edf4f9}.has-navigation .green{--tone:#518c72;--tint:#edf5f0}.has-navigation .amber{--tone:#a58c55;--tint:#f8f4eb}.has-navigation .gray{--tone:#8d8d98;--tint:#f1f1f4}
-.has-navigation .sidebar-bottom{margin-top:auto;padding-top:35px}
-.has-navigation .help-link{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--nav-muted);padding:10px;min-height:44px}
-.has-navigation .profile{display:flex;align-items:center;gap:9px;margin-top:13px;padding:14px 9px 0;border-top:1px solid var(--nav-line);min-width:0}
-.has-navigation .profile small{font-size:11px;display:block;color:var(--nav-muted);overflow-wrap:anywhere}
+.has-navigation .ib{display:inline-grid;place-items:center;width:36px;height:36px;border:0;border-radius:8px;background:none;color:var(--nav-muted);flex:none;cursor:pointer}
+.has-navigation .ib:hover{background:var(--nav-tab);color:var(--nav-ink)}
+.has-navigation .nav-toggle,.has-navigation .nav-close,.has-navigation .nav-backdrop{display:none}
+.has-navigation .tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px;padding:3px;background:var(--nav-tab);border-radius:10px}
+.has-navigation .tabs a{display:flex;align-items:center;justify-content:center;gap:6px;min-height:36px;border-radius:7px;font-size:12px;font-weight:500;color:var(--nav-muted)}
+.has-navigation .tabs a:hover{color:var(--nav-ink)}
+.has-navigation .tabs a[aria-current=page]{background:var(--nav-tab-on);color:var(--nav-ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.has-navigation .tabs svg{width:14px;height:14px}
+.has-navigation .side-sessions{display:flex;flex-direction:column;gap:2px;flex:1}
+.has-navigation .side-label{padding:6px 12px;font-size:11px;font-weight:600;color:var(--nav-muted)}
+.has-navigation .side-group{position:relative;margin-bottom:8px}
+.has-navigation .side-group>details>summary{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 10px 0 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;list-style:none}
+.has-navigation .side-group summary::-webkit-details-marker{display:none}
+.has-navigation .side-group>details>summary:hover{background:var(--nav-tab)}
+.has-navigation .gico{width:12px;height:12px;display:grid;place-items:center;flex:none}
+.has-navigation .gname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.has-navigation .gcount{font-size:11px;font-weight:500;color:var(--nav-muted);font-variant-numeric:tabular-nums}
+.has-navigation .side-group .chev{margin-left:auto;width:14px;height:14px;color:var(--nav-muted);transition:transform .15s}
+.has-navigation .side-group>details:not([open]) .chev{transform:rotate(-90deg)}
+.has-navigation .gopen{position:absolute;right:30px;top:4px;width:32px;height:32px;opacity:0}
+.has-navigation .gopen svg{width:14px;height:14px}
+.has-navigation .side-group:hover .gopen,.has-navigation .gopen:focus-visible{opacity:1}
+.has-navigation .side-session{display:flex;flex-direction:column;justify-content:center;gap:1px;min-height:52px;padding:6px 10px 6px 32px;border-radius:8px;position:relative;min-width:0}
+.has-navigation .side-session:hover{background:var(--nav-tab)}
+.has-navigation .side-session[aria-current=page]{background:var(--nav-accent-soft)}
+.has-navigation .side-session[aria-current=page] .rt{color:var(--nav-accent)}
+.has-navigation .side-session .dot{position:absolute;left:14px;top:20px;width:9px;height:9px;border-radius:50%;border:1.6px solid var(--nav-accent)}
+.has-navigation .side-session .dot.live{background:var(--nav-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--nav-accent) 20%,transparent)}
+.has-navigation .rl{display:flex;align-items:center;gap:6px;min-width:0}
+.has-navigation .rt{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.has-navigation .rw,.has-navigation .rs{font-size:11px;color:var(--nav-muted);flex:none;font-variant-numeric:tabular-nums}
+.has-navigation .rs{flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.has-navigation .rl .i{width:12px;height:12px;color:var(--nav-muted)}
+.has-navigation .rl .avatar{width:16px;height:16px;font-size:8px;font-weight:600;background:var(--nav-av)}
+.has-navigation .app{font-size:10px;font-weight:600;color:var(--nav-muted);border:1px solid var(--nav-line);border-radius:4px;padding:0 4px;line-height:15px;flex:none}
+.has-navigation .gfoot{position:relative;min-height:32px}
+.has-navigation .gfoot>.lk{position:absolute;right:6px;top:0}
+.has-navigation .more>summary{padding-left:32px;list-style:none;width:max-content}
+.has-navigation .more[open]>summary{display:none}
+.has-navigation .lk{display:inline-flex;align-items:center;gap:4px;min-height:32px;font-size:12px;color:var(--nav-muted);cursor:pointer}
+.has-navigation .lk:hover{color:var(--nav-accent)}
+.has-navigation .lk .i{width:12px;height:12px}
+.has-navigation .side-quiet{padding:0 12px}
+.has-navigation .side-empty{padding:20px 16px;text-align:center;font-size:12px;color:var(--nav-muted)}
+.has-navigation .side-empty b{display:block;font-size:13px;color:var(--nav-ink);margin-bottom:4px}
+.has-navigation .profile{display:flex;align-items:center;gap:10px;padding:10px 4px 0 5px;border-top:1px solid var(--nav-line);min-width:0}
+.has-navigation .profile small{flex:1;min-width:0;font-size:12px;color:var(--nav-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.has-navigation .profile .avatar{width:26px;height:26px;font-size:10px;font-weight:600;background:var(--nav-av)}
 .has-navigation .shell-main{min-width:0}
 .has-navigation .topbar{min-height:71px;padding:8px 42px;border-bottom:1px solid var(--nav-line);display:flex;align-items:center;gap:20px;position:sticky;top:0;z-index:6;background:hsl(var(--background) / .97);backdrop-filter:blur(8px)}
 .has-navigation .crumb{display:flex;align-items:center;gap:9px;color:var(--nav-muted);font-size:12px;min-width:0}
@@ -462,7 +501,7 @@ body.has-navigation{
 .has-navigation .global-search{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--nav-muted);min-width:220px;max-width:320px}
 .has-navigation .global-search input{background:none;border:0;min-width:0;width:100%;font-size:12px;padding:10px 4px;min-height:40px}
 .has-navigation .global-search button{border:0;background:none;padding:8px;display:grid;place-items:center;min-height:44px;min-width:44px}
-.has-navigation .mobile-brand,.has-navigation .mobile-nav{display:none}
+.has-navigation .mobile-brand{display:none}
 .has-navigation .content{width:100%;max-width:1220px;margin:0 auto;padding:39px 42px 68px;min-width:0}
 .has-navigation .pagehead{display:flex;align-items:flex-start;gap:20px;margin-bottom:31px}
 .has-navigation .pagehead h1{font-size:28px;font-weight:620;line-height:1.2;letter-spacing:-.85px}
@@ -579,7 +618,7 @@ body.has-navigation{
 .has-navigation :is(a,button,input,select,summary):focus-visible{outline-color:var(--nav-accent)}
 @media(min-width:1000px){.has-navigation .actionbar .in{padding-inline:0}}
 @media(max-width:1150px){
-  .has-navigation .shell{grid-template-columns:196px minmax(0,1fr)}
+  .has-navigation .shell{grid-template-columns:256px minmax(0,1fr)}
   .has-navigation .content{padding:30px 28px 60px}.has-navigation .topbar{padding-inline:28px}
   .has-navigation .session-row{grid-template-columns:minmax(0,1fr) 105px 83px;gap:12px}
   .has-navigation .recent .list-author,.has-navigation .all-projects .list-author{display:none}
@@ -592,11 +631,18 @@ body.has-navigation{
 }
 @media(min-width:760px) and (max-width:999px){
   .has-navigation.is-detail .content{padding-bottom:110px}
-  .has-navigation .actionbar{left:196px}
+  .has-navigation .actionbar{left:256px}
   .has-navigation .detail .side{position:static}
 }
 @media(max-width:759px){
-  .has-navigation .shell{display:block}.has-navigation .sidebar{display:none}
+  .has-navigation .shell{display:block}
+  .has-navigation .sidebar{position:fixed;inset:0 auto 0 0;z-index:20;width:min(330px,88vw);box-shadow:8px 0 24px rgba(0,0,0,.12);transform:translateX(-100%);visibility:hidden;transition:transform .2s,visibility .2s}
+  .has-navigation.nav-open .sidebar{transform:none;visibility:visible}
+  .has-navigation.nav-open .nav-backdrop{display:block;position:fixed;inset:0;z-index:19;background:rgba(9,9,11,.45)}
+  .has-navigation.nav-open{overflow:hidden}
+  .has-navigation .nav-toggle,.has-navigation .nav-close{display:inline-grid;width:44px;height:44px}
+  .has-navigation .tabs a{min-height:40px;font-size:13px}
+  .has-navigation .side-session{min-height:56px}
   .has-navigation .topbar{min-height:62px;padding:8px 20px;gap:10px}
   .has-navigation .mobile-brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14px;letter-spacing:-.3px;min-height:44px;white-space:nowrap}
   .has-navigation .topbar .crumb{display:none}
@@ -621,10 +667,6 @@ body.has-navigation{
   .has-navigation .home-projects{margin-top:28px}.has-navigation .project-grid{grid-template-columns:1fr;gap:11px}
   .has-navigation .project-card{min-height:0;padding:17px}.has-navigation .project-card h3{font-size:13px}
   .has-navigation .last-session{display:none}.has-navigation .project-card-bottom{padding-top:15px}
-  .has-navigation .mobile-nav{position:fixed;bottom:0;left:0;right:0;background:hsl(var(--background));border-top:1px solid var(--nav-line);display:flex;justify-content:space-around;height:var(--mobile-nav-height);padding:6px 6px calc(8px + env(safe-area-inset-bottom,0px));z-index:12}
-  .has-navigation .mobile-nav a{display:grid;justify-items:center;gap:3px;color:var(--nav-muted);font-size:10px;padding:4px 17px;min-height:44px}
-  .has-navigation .mobile-nav a[aria-current=page]{color:var(--nav-accent)}
-  .has-navigation .mobile-nav svg{width:19px;height:19px}
   .has-navigation .toolbar{gap:8px;margin-bottom:16px}.has-navigation .searchbox{max-width:none;flex-basis:100%;min-height:44px}
   .has-navigation .searchbox input{font-size:16px}.has-navigation .searchbox input::placeholder{font-size:12px}
   .has-navigation .toolbar select{min-height:44px;font-size:16px;max-width:100%;flex:1;min-width:0}
@@ -665,6 +707,9 @@ body.has-navigation{
 
 const icons = {
   back: '<path d="M15 6l-6 6 6 6"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  open: '<path d="M7 17L17 7M8 7h9v9"/>',
+  next: '<path d="M9 18l6-6-6-6"/>',
   search: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
   filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
@@ -712,34 +757,63 @@ export function dateLabel(value: unknown, relative = false): string {
   return `<time datetime="${date.toISOString()}" title="${date.toISOString()}">${escapeHtml(label)}</time>`;
 }
 
+const tones = ["violet", "blue", "green", "amber", "gray"];
+const LIVE_MS = 5 * 60000;
+const SHOWN = 4;
+
+/** Sidebar: in-progress sessions grouped by project, most recent sync first. Done sessions stay on project pages. */
+function sidebarSessions(options: NavigationOptions): string {
+  const rows = options.sidebar ?? [];
+  const email = (options.email ?? "").toLowerCase();
+  const groups = new Map<string, SidebarSession[]>();
+  for (const s of rows) groups.set(s.project, [...(groups.get(s.project) ?? []), s]);
+  const projectHref = (slug: string) => `/projects/${encodeURIComponent(slug)}`;
+  const row = (s: SidebarSession) => {
+    const other = s.owner_email.toLowerCase() !== email;
+    return `<a class="side-session" href="/s/${encodeURIComponent(s.id)}"${options.currentSession === s.id ? ' aria-current="page"' : ""}>
+      <span class="dot${s.last_synced_at > Date.now() - LIVE_MS ? " live" : ""}" aria-hidden="true"></span>
+      <span class="rl"><span class="rt">${escapeHtml(s.title || s.id)}</span><span class="rw">${dateLabel(s.last_synced_at, true)}</span></span>
+      <span class="rl">${other ? `<span class="avatar" title="${escapeHtml(s.owner_name || s.owner_email)}">${escapeHtml(initials(s.owner_name || s.owner_email))}</span>` : ""}${s.forked_from ? `<span title="Forked">${icon("branch")}</span>` : ""}<span class="rs mono">${escapeHtml(s.branch || s.repo || "")}</span>${s.external_app ? `<span class="app">${escapeHtml(appName(s.external_app))}</span>` : ""}</span></a>`;
+  };
+  const sections = [...groups].map(([slug, list]) => {
+    const index = options.projects.findIndex((p) => p.slug === slug);
+    const project = options.projects[index];
+    const name = project?.name || slug;
+    const done = project?.done ?? 0;
+    const more = list.length - SHOWN;
+    const foot = more > 0 || done ? `<div class="gfoot">${more > 0 ? `<details class="more"><summary class="lk">Show ${more} more</summary>${list.slice(SHOWN).map(row).join("")}</details>` : ""}${done ? `<a class="lk" href="${escapeHtml(projectHref(slug))}">${done} done${icon("next")}</a>` : ""}</div>` : "";
+    // ponytail: groups always render open; persist collapse per viewer if people ask.
+    return `<section class="side-group" aria-label="${escapeHtml(name)}"><details open><summary><span class="gico"><span class="project-dot ${tones[Math.max(index, 0) % tones.length]}"></span></span><span class="gname">${escapeHtml(name)}</span><span class="gcount">${list.length}</span>${icon("chev").replace('class="i"', 'class="i chev"')}</summary>
+      ${list.slice(0, SHOWN).map(row).join("")}${foot}</details>
+      <a class="ib gopen" href="${escapeHtml(projectHref(slug))}" aria-label="Open project ${escapeHtml(name)}">${icon("open")}</a></section>`;
+  }).join("");
+  const idle = options.projects.filter((p) => !groups.has(p.slug)).length;
+  return `<div class="side-sessions"><div class="side-label">In progress · ${rows.length}</div>
+    ${sections || `<div class="side-empty"><b>All sessions are done</b>Run <span class="mono">/share-session</span> in Claude Code to add one.<br><a class="lk" href="/sessions">Browse all sessions${icon("next")}</a></div>`}
+    ${sections && idle ? `<a class="lk side-quiet" href="/projects">${idle} project${idle === 1 ? "" : "s"} with nothing in progress${icon("next")}</a>` : ""}</div>`;
+}
+
 function navigationShell(body: string, detail: boolean, options: NavigationOptions): string {
   const destinations = [
-    { key: "home", href: "/", label: "Home", mobile: "Home", icon: "home" },
-    { key: "projects", href: "/projects", label: "Projects", mobile: "Projects", icon: "folder" },
-    { key: "sessions", href: "/sessions", label: "All sessions", mobile: "Sessions", icon: "chat" },
+    { key: "home", href: "/", label: "Home", icon: "home" },
+    { key: "projects", href: "/projects", label: "Projects", icon: "folder" },
+    { key: "sessions", href: "/sessions", label: "All", icon: "chat" },
   ] as const;
-  const links = (mobile = false) => destinations.map((item) => `<a href="${item.href}"${options.active === item.key ? ' aria-current="page"' : ""}>${icon(item.icon)}${mobile ? item.mobile : item.label}</a>`).join("");
+  const links = destinations.map((item) => `<a href="${item.href}"${options.active === item.key ? ' aria-current="page"' : ""}>${icon(item.icon)}${item.label}</a>`).join("");
   const breadcrumbs = options.breadcrumbs.map((crumb, index) => `${index ? icon("back") : ""}${crumb.href
     ? `<a href="${escapeHtml(crumb.href)}">${escapeHtml(crumb.label)}</a>`
     : `<span${index === options.breadcrumbs.length - 1 ? ' aria-current="page"' : ""}>${escapeHtml(crumb.label)}</span>`}`).join("");
-  const tones = ["violet", "blue", "green", "amber"];
-  const projects = options.projects.filter((project) => project.last_synced_at !== null).slice(0, 4).map((project, index) => {
-    const href = `/projects/${encodeURIComponent(project.slug)}`;
-    const selected = options.currentProject === project.slug || options.breadcrumbs.some((crumb) => crumb.href === href) || options.backHref?.split("?")[0] === href;
-    return `<a class="side-project${selected ? " selected" : ""}" href="${escapeHtml(href)}"><span class="project-dot ${tones[index]}" aria-hidden="true"></span><span class="project-name">${escapeHtml(project.name)}</span><span class="count">${escapeHtml(project.sessions)}</span></a>`;
-  }).join("");
   const back = detail && options.backHref
     ? `<a class="nav-back" data-list-back href="${escapeHtml(options.backHref)}" title="${escapeHtml(options.backLabel || "Back to sessions")}">${icon("back")}<span>${escapeHtml(options.backLabel || "Back to sessions")}</span></a>`
     : "";
   return `<a class="skip-link" href="#${detail ? "view" : "home"}">Skip to content</a>
-<div class="shell"><aside class="sidebar" aria-label="Shared space">
-  <a class="brand" href="/"><span class="brand-icon">${icon("chat")}</span>Session Share</a>
-  <nav class="nav" aria-label="Main navigation">${links()}</nav>
-  ${projects ? `<section class="side-section" aria-label="Recent projects"><div class="side-label">Recent projects <a href="/projects">All</a></div>${projects}</section>` : ""}
-  <div class="sidebar-bottom"><a class="help-link" href="#share-help">${icon("info")}Share a session</a>
-    ${options.email ? `<div class="profile"><span class="avatar" aria-hidden="true">${escapeHtml(initials(options.email))}</span><small>${escapeHtml(options.email)}</small></div>` : ""}
-  </div>
-</aside><div class="shell-main"><header class="topbar">
+<div class="shell"><aside class="sidebar" id="sidebar" aria-label="Shared space">
+  <div class="side-head"><a class="brand" href="/"><span class="brand-icon">${icon("chat")}</span>Session Share</a><button class="ib nav-close" type="button" data-nav-toggle aria-label="Close menu">${icon("close")}</button></div>
+  <nav class="tabs" aria-label="Main navigation">${links}</nav>
+  ${sidebarSessions(options)}
+  <div class="profile">${options.email ? `<span class="avatar" aria-hidden="true">${escapeHtml(initials(options.email))}</span><small title="${escapeHtml(options.email)}">${escapeHtml(options.email)}</small>` : "<small></small>"}<a class="ib" href="#share-help" aria-label="Share a session" title="Share a session">${icon("info")}</a></div>
+</aside><div class="nav-backdrop" data-nav-toggle></div><div class="shell-main"><header class="topbar">
+  <button class="ib nav-toggle" type="button" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="Open menu">${icon("menu")}</button>
   ${back || `<a class="mobile-brand" href="/">${icon("chat")}Session Share</a>`}
   <nav class="crumb" aria-label="Breadcrumb">${breadcrumbs}</nav>
   <form class="global-search" method="get" action="/sessions" role="search"><label class="sr" for="global-q">Search all sessions</label><input id="global-q" name="q" type="search" placeholder="Search sessions…"><button type="submit" aria-label="Search all sessions">${icon("search")}</button></form>
@@ -748,8 +822,7 @@ function navigationShell(body: string, detail: boolean, options: NavigationOptio
     <p>To share a conversation, add the skill in Claude (Settings → Capabilities → Skills) or unzip it into <code>~/.claude/skills/</code>, then run <code>/share-session</code>.</p>
     <a class="btn" href="/share-session.skill" download>Download the skill <span class="mono">share-session.skill</span></a>
   </div></details></footer>
-</main></div></div>
-<nav class="mobile-nav" id="mobile-nav" aria-label="Navigation mobile">${links(true)}</nav>`;
+</main></div></div>`;
 }
 
 export function page(title: string, body: string, status = 200, detail = false, options?: NavigationOptions): Response {
@@ -775,6 +848,13 @@ if(shareHelp){
   if(window.location?.hash==='#share-help')shareHelp.open=true;
   for(const link of document.querySelectorAll('[href="#share-help"]'))link.addEventListener('click',()=>{shareHelp.open=true;});
 }
+// Mobile drawer: the sidebar slides over the page; Escape or the backdrop closes it.
+const navToggles=document.querySelectorAll('[data-nav-toggle]');
+const setNav=open=>{document.body.classList.toggle('nav-open',open);for(const b of navToggles)if(b.hasAttribute('aria-expanded'))b.setAttribute('aria-expanded',String(open));if(open)document.querySelector('.nav-close')?.focus();};
+if(navToggles.length){
+  for(const b of navToggles)b.addEventListener('click',()=>setNav(!document.body.classList.contains('nav-open')));
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('nav-open')){setNav(false);document.querySelector('.nav-toggle')?.focus();}});
+}
 for(const button of document.querySelectorAll('[data-copy]'))button.addEventListener('click',async()=>{
   try{await navigator.clipboard.writeText(button.dataset.copy);notify('Command copied');}
   catch{
@@ -791,8 +871,7 @@ if(conversation){
     const atBottom=conversation.scrollHeight-conversation.clientHeight-conversation.scrollTop<24;
     const viewport=window.visualViewport?.height??window.innerHeight;
     const actionbar=document.querySelector('.actionbar');
-    const mobileNav=document.getElementById('mobile-nav');
-    const bottom=window.matchMedia('(min-width:1000px)').matches?24:(actionbar?actionbar.getBoundingClientRect().height:88)+(mobileNav?mobileNav.getBoundingClientRect().height:0)+16;
+    const bottom=window.matchMedia('(min-width:1000px)').matches?24:(actionbar?actionbar.getBoundingClientRect().height:88)+16;
     const bounds=conversation.getBoundingClientRect();
     const previousViewport=parseFloat(conversation.style.getPropertyValue('--transcript-viewport'))||viewport;
     const previousBottom=parseFloat(conversation.style.getPropertyValue('--transcript-bottom'))||bottom;

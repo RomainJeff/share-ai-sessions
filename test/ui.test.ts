@@ -158,7 +158,9 @@ describe("web reader", () => {
     const other = await seed("Other title", [], "else/repo");
     await env.DB.prepare("UPDATE sessions SET last_synced_at = ?, summary = ? WHERE id = ?").bind(Date.now() - 2000, "needle", older).run();
     await env.DB.prepare("UPDATE sessions SET last_synced_at = ?, summary = ? WHERE id = ?").bind(Date.now() - 1000, "needle", newer).run();
-    const html = await (await get("/sessions?q=needle")).text();
+    // Search results live in <main>; the sidebar lists every in-progress session regardless of the query.
+    const page = await (await get("/sessions?q=needle")).text();
+    const html = page.slice(page.indexOf("<main"));
     expect(html).toContain(`/s/${older}`);
     expect(html.indexOf("Newer hit")).toBeLessThan(html.indexOf("Older hit"));
     expect(html).not.toContain(`/s/${other}`);

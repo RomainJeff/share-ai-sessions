@@ -1,7 +1,7 @@
 import { readerLine } from "../../skills/share-session/scripts/transcript";
 import type { Identity } from "../auth";
 import { canManageSession, MEMBER, roleIn, VISIBLE, visibleSince } from "../db";
-import { getProjectSummaries } from "../navigation";
+import { getNavigation } from "../navigation";
 import { markdownHtml } from "../markdown";
 import { appName, author, dateLabel, escapeHtml as e, icon, type IconName, page, statusIcon } from "../ui";
 
@@ -269,7 +269,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
   const session = await env.DB.prepare(`SELECT * FROM sessions WHERE id = ? AND ${VISIBLE} AND ${MEMBER}`)
     .bind(id, visibleSince(), who.email).first<Record<string, string | number | null>>();
   if (!session) return page("Session not found", "<h1>Session not found</h1>", 404);
-  const projects = await getProjectSummaries(env, who.email);
+  const { projects, sidebar } = await getNavigation(env, who.email);
   const project = projects.find(p => p.slug === session.project)!;
   const projectHref = `/projects/${encodeURIComponent(String(session.project))}`;
   let backHref = projectHref;
@@ -368,7 +368,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
       ${invalid ? `<p class="ro-note">${invalid} invalid JSONL line(s) skipped.</p>` : ""}
       ${conversation || '<p class="empty">No messages.</p>'}
     </section>`}</div>`, 200, true, {
-      active: "projects", projects, email: who.email, currentProject: String(session.project), backHref,
+      active: "projects", projects, sidebar, currentSession: id, email: who.email, currentProject: String(session.project), backHref,
       backLabel: backHref.startsWith("/sessions") ? "All sessions" : project?.name || String(session.project),
       breadcrumbs: [
         { label: "Home", href: "/" }, { label: "Projects", href: "/projects" },

@@ -2,7 +2,7 @@ import type { Identity } from "../auth";
 import { atLeast, roleIn, ROLES, SLUG, type Role } from "../db";
 import { dateLabel, escapeHtml as e, page } from "../ui";
 import { getProject } from "./projects";
-import { getProjectSummaries } from "../navigation";
+import { getNavigation } from "../navigation";
 import { activityNote, folder, projectPath, roleLabel } from "../navigation-render";
 
 type Project = { slug: string; name: string; role: Role; sessions: number };
@@ -13,7 +13,7 @@ const roles = (selected: Role) => ROLES.map((role) =>
 
 /** GET /projects — all accessible projects, including empty spaces. */
 export async function projectsPage(request: Request, env: Env, who: Identity): Promise<Response> {
-  const projects = await getProjectSummaries(env, who.email);
+  const { projects, sidebar } = await getNavigation(env, who.email);
   const params = new URL(request.url).searchParams;
   const q = params.get("q") || "";
   const oldest = params.get("sort") === "oldest";
@@ -27,7 +27,7 @@ export async function projectsPage(request: Request, env: Env, who: Identity): P
         <span class="number">${p.sessions}<span class="mobile-count"> session${p.sessions === 1 ? "" : "s"}</span></span><span class="number">${p.members}</span><span><span class="role">${roleLabel(p.role)}</span></span><span class="when">${p.last_synced_at === null ? "No activity" : dateLabel(p.last_synced_at, true)}</span></article>`).join("")}</section>`
       : `<div class="empty"><h2>${q ? "No projects found" : "No accessible projects"}</h2><p>${q ? "Try another project name." : "Ask an owner to add you to a project."}</p>${q ? '<a class="btn" href="/projects">Clear filters</a>' : ""}</div>`}
       ${activityNote()}<p class="footnote">Only projects you are a member of are shown.</p>`, 200, false,
-      { active: "projects", projects, breadcrumbs: [{ label: "Projects" }], email: who.email });
+      { active: "projects", projects, sidebar, breadcrumbs: [{ label: "Projects" }], email: who.email });
 }
 
 /** GET /projects/:slug/settings — owners only; hide the project from everyone else. */
@@ -37,7 +37,7 @@ export async function projectSettingsPage(request: Request, env: Env, who: Ident
     return page("Project not found", "<h1>Project not found</h1>", 404);
   }
   const project = await (await getProject(request, env, who, params)).json() as Project & { members: Member[] };
-  const projects = await getProjectSummaries(env, who.email);
+  const { projects, sidebar } = await getNavigation(env, who.email);
   return page(`Settings · ${project.name}`, `<div class="list-head"><h1>Settings · ${e(project.name)}</h1>
     <div class="row"><a class="btn" href="/projects">My projects</a><a class="btn" href="${sessionsLink(slug)}">View sessions</a></div></div>
     <div class="project-settings" data-project="${e(slug)}">
@@ -56,5 +56,5 @@ export async function projectSettingsPage(request: Request, env: Env, who: Ident
         <label class="f">Role<select class="field" name="role">${roles("reader")}</select></label>
         <button class="btn primary" type="submit" disabled>Add member</button>
       </form></div></section>
-    </div>`, 200, false, { active: "projects", projects, email: who.email, currentProject: slug, breadcrumbs: [{ label: "Projects", href: "/projects" }, { label: project.name, href: projectPath(slug) }, { label: "Settings" }] });
+    </div>`, 200, false, { active: "projects", projects, sidebar, email: who.email, currentProject: slug, breadcrumbs: [{ label: "Projects", href: "/projects" }, { label: project.name, href: projectPath(slug) }, { label: "Settings" }] });
 }

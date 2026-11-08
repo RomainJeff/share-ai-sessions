@@ -1,6 +1,6 @@
 import type { Identity } from "../auth";
 import { atLeast, MEMBER, SLUG, VISIBLE, visibleSince, type Role } from "../db";
-import { getProjectSummaries, type ProjectSummary } from "../navigation";
+import { getNavigation, type ProjectSummary } from "../navigation";
 import { activityNote, folder, groupedSessions, projectPath, roleLabel, type NavigationSession } from "../navigation-render";
 import { dateLabel, escapeHtml as e, icon, page } from "../ui";
 
@@ -20,7 +20,7 @@ export async function projectSessionsPage(request: Request, env: Env, who: Ident
 }
 
 async function renderList(request: Request, env: Env, who: Identity, slug?: string): Promise<Response> {
-  const projects = await getProjectSummaries(env, who.email);
+  const { projects, sidebar } = await getNavigation(env, who.email);
   const project = slug ? projects.find((p) => p.slug === slug) : undefined;
   if (slug && !project) return notFound();
   const members = project ? (await env.DB.prepare(`SELECT email,role FROM project_members WHERE project = ?
@@ -28,7 +28,7 @@ async function renderList(request: Request, env: Env, who: Identity, slug?: stri
     .bind(project.slug).all<ProjectMember>()).results : [];
   const path = project ? projectPath(project.slug) : "/sessions";
   const params = new URL(request.url).searchParams;
-  const options = { active: project ? "projects" as const : "sessions" as const, projects, email: who.email, currentProject: project?.slug,
+  const options = { active: project ? "projects" as const : "sessions" as const, projects, sidebar, email: who.email, currentProject: project?.slug,
     breadcrumbs: project ? [{ label: "Projects", href: "/projects" }, { label: project.name }] : [{ label: "All sessions" }] };
   const where = [VISIBLE, MEMBER];
   const binds: (string | number)[] = [visibleSince(), who.email];
