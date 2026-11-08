@@ -46,12 +46,12 @@ const md = new Marked({ gfm: true, breaks: true, renderer: {
   // CSP blocks remote images anyway: show the alt text, linked when the URL is safe.
   image({ href, text }) {
     const url = safeUrl(href);
-    const label = `<span class="md-img">Image : ${e(text || href)}</span>`;
+    const label = `<span class="md-img">Image: ${e(text || href)}</span>`;
     return url ? `<a href="${e(url)}" rel="noopener noreferrer nofollow" target="_blank">${label}</a>` : label;
   },
   code({ text, lang }) {
     const name = (lang || "").match(/^\S*/)?.[0] ?? "";
-    return `<div class="cb"><div class="cb-h"><span class="mono">${e(name || "texte")}</span><button class="copy" type="button" data-copy-code>Copier</button></div><pre><code>${highlight(text, name)}</code></pre></div>`;
+    return `<div class="cb"><div class="cb-h"><span class="mono">${e(name || "text")}</span><button class="copy" type="button" data-copy-code>Copy</button></div><pre><code>${highlight(text, name)}</code></pre></div>`;
   },
   table(token: Tokens.Table) { return `<div class="tblw">${Renderer.prototype.table.call(this, token)}</div>`; },
 } });

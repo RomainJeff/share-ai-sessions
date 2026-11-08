@@ -35,14 +35,14 @@ const textOf = (value: unknown): string => typeof value === "string" ? value
   : Array.isArray(value) ? value.map((b) => typeof b === "string" ? b : b?.type === "text" ? String(b.text ?? "") : b?.type === "image" ? "[image]" : JSON.stringify(b)).join("\n")
   : value == null ? "" : JSON.stringify(value, null, 2);
 const lines = (text: string) => text ? text.replace(/\n$/, "").split("\n").length : 0;
-const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
-const raw = (records: string[]) => `<details class="reason raw"><summary>${icon("chev")}JSON brut</summary><pre class="code">${records.map(e).join("\n")}</pre></details>`;
+const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
+const raw = (records: string[]) => `<details class="reason raw"><summary>${icon("chev")}Raw JSON</summary><pre class="code">${records.map(e).join("\n")}</pre></details>`;
 
 /** Long outputs keep their head and tail; the full text stays in the raw JSON. */
 function clip(text: string, keep = 20): string {
   const all = text.replace(/\n$/, "").split("\n");
   if (all.length <= keep * 2 + 4) return e(all.join("\n"));
-  return `${e(all.slice(0, keep).join("\n"))}\n<span class="cut">… ${all.length - keep * 2} lignes masquées …</span>\n${e(all.slice(-keep).join("\n"))}`;
+  return `${e(all.slice(0, keep).join("\n"))}\n<span class="cut">… ${all.length - keep * 2} lines hidden …</span>\n${e(all.slice(-keep).join("\n"))}`;
 }
 const code = (text: string) => `<pre class="code">${clip(text)}</pre>`;
 const firstString = (input: unknown) => input && typeof input === "object" ? Object.values(input).find((v) => typeof v === "string" && v.length < 300) as string | undefined : typeof input === "string" ? input.split("\n")[0] : undefined;
@@ -77,38 +77,38 @@ function toolView(name: string, input: any, result: Block | undefined): ToolView
     try { const parsed = JSON.parse(out); if (typeof parsed?.output === "string") { out = parsed.output; exit = parsed.metadata?.exit_code?.toString(); } } catch { /* plain text output */ }
     exit ??= out.match(/(?:exit code|exited with code)[:\s]+(-?\d+)/i)?.[1];
     const failed = err || (exit !== undefined && exit !== "0");
-    return { icon: "term", verb: "Bash", arg: cmd.split("\n")[0], meta: exit !== undefined ? `<span class="${failed ? "bad" : ""}">exit ${e(exit)}</span>` : err ? '<span class="bad">erreur</span>' : undefined,
+    return { icon: "term", verb: "Bash", arg: cmd.split("\n")[0], meta: exit !== undefined ? `<span class="${failed ? "bad" : ""}">exit ${e(exit)}</span>` : err ? '<span class="bad">error</span>' : undefined,
       body: `<pre class="term"><span class="t-dim">$ </span>${e(cmd)}${out ? `\n${clip(out)}` : ""}</pre>` };
   }
-  if (name === "Read") return { icon: "file", verb: "Lecture", arg: inp.file_path, meta: count(lines(out), "ligne"), body: outBody, read: "file" };
+  if (name === "Read") return { icon: "file", verb: "Read", arg: inp.file_path, meta: count(lines(out), "line"), body: outBody, read: "file" };
   if (name === "Edit" || name === "MultiEdit") {
     const d = diffHtml(editRows(name === "Edit" ? [inp] : Array.isArray(inp.edits) ? inp.edits : []));
-    return { icon: "pen", verb: "Modification", arg: inp.file_path, meta: `<span class="add">+${d.add}</span> <span class="del">−${d.del}</span>`, body: d.html + (err ? outBody : ""), edit: true };
+    return { icon: "pen", verb: "Edit", arg: inp.file_path, meta: `<span class="add">+${d.add}</span> <span class="del">−${d.del}</span>`, body: d.html + (err ? outBody : ""), edit: true };
   }
   if (name === "Write") {
     const text = String(inp.content ?? "");
-    return { icon: "pen", verb: "Écriture", arg: inp.file_path, meta: `<span class="add">+${lines(text)}</span>`, body: code(text) + (err ? outBody : ""), edit: true };
+    return { icon: "pen", verb: "Write", arg: inp.file_path, meta: `<span class="add">+${lines(text)}</span>`, body: code(text) + (err ? outBody : ""), edit: true };
   }
   if (name === "apply_patch") {
     const patch = typeof input === "string" ? input : String(inp.input ?? inp.patch ?? "");
     const d = diffHtml(patch.split("\n"));
     return { icon: "pen", verb: "Patch", arg: patch.match(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/m)?.[1], meta: `<span class="add">+${d.add}</span> <span class="del">−${d.del}</span>`, body: d.html + (err ? outBody : ""), edit: true };
   }
-  if (name === "Grep") return { icon: "search", verb: "Recherche", arg: `"${inp.pattern ?? ""}"${inp.path ? ` dans ${inp.path}` : ""}`, meta: count(lines(out), "résultat"), body: outBody, read: "search" };
-  if (name === "Glob") return { icon: "search", verb: "Fichiers", arg: inp.pattern, meta: count(lines(out), "résultat"), body: outBody, read: "search" };
-  if (name === "WebFetch") return { icon: "globe", verb: "Page web", arg: inp.url, body: outBody, read: "file" };
-  if (name === "WebSearch" || name === "web_search") return { icon: "globe", verb: "Recherche web", arg: inp.query, body: outBody, read: "search" };
+  if (name === "Grep") return { icon: "search", verb: "Search", arg: `"${inp.pattern ?? ""}"${inp.path ? ` in ${inp.path}` : ""}`, meta: count(lines(out), "result"), body: outBody, read: "search" };
+  if (name === "Glob") return { icon: "search", verb: "Files", arg: inp.pattern, meta: count(lines(out), "result"), body: outBody, read: "search" };
+  if (name === "WebFetch") return { icon: "globe", verb: "Web page", arg: inp.url, body: outBody, read: "file" };
+  if (name === "WebSearch" || name === "web_search") return { icon: "globe", verb: "Web search", arg: inp.query, body: outBody, read: "search" };
   if (name === "Task" || name === "Agent") return { icon: "bot", verb: "Agent", arg: inp.description || inp.subagent_type,
-    body: `<h4>Consigne</h4>${markdownHtml(String(inp.prompt ?? ""))}${result ? `<h4>Résultat</h4>${markdownHtml(out)}` : ""}` };
+    body: `<h4>Prompt</h4>${markdownHtml(String(inp.prompt ?? ""))}${result ? `<h4>Result</h4>${markdownHtml(out)}` : ""}` };
   if (name === "TodoWrite" || name === "update_plan") {
     const todos: Block[] = Array.isArray(inp.todos) ? inp.todos : Array.isArray(inp.plan) ? inp.plan : [];
     const done = todos.filter((t) => t.status === "completed").length;
-    return { icon: "list", verb: "Tâches", arg: `${done}/${todos.length} terminées`,
+    return { icon: "list", verb: "Tasks", arg: `${done}/${todos.length} done`,
       body: `<ul class="todo">${todos.map((t) => `<li class="${e(t.status)}"><span class="box" aria-hidden="true"></span>${e(t.content ?? t.step ?? "")}</li>`).join("")}</ul>` };
   }
   const mcp = name.match(/^mcp__(.+?)__(.+)$/);
-  return { icon: mcp ? "plug" : "term", verb: mcp ? `${mcp[1]} › ${mcp[2]}` : name || "Outil", arg: firstString(input),
-    body: `<h4>Entrée</h4><pre class="code">${e(typeof input === "string" ? input : JSON.stringify(input, null, 2))}</pre>${result ? `<h4>Résultat</h4>${outBody}` : ""}` };
+  return { icon: mcp ? "plug" : "term", verb: mcp ? `${mcp[1]} › ${mcp[2]}` : name || "Tool", arg: firstString(input),
+    body: `<h4>Input</h4><pre class="code">${e(typeof input === "string" ? input : JSON.stringify(input, null, 2))}</pre>${result ? `<h4>Result</h4>${outBody}` : ""}` };
 }
 
 function toolRow(view: ToolView, err: boolean, raws: string[]): string {
@@ -134,27 +134,27 @@ function recordItems({ raw: line, data }: TranscriptRecord, results: Results, ca
       items.push({ html: toolRow(view, err, [...takeRaw(), ...(paired ? [paired.raw] : [])]), read: err ? undefined : view.read });
     } else if (block.type === "tool_result") {
       if (calls.has(String(block.tool_use_id))) continue;
-      items.push({ html: toolRow({ icon: "term", verb: "Résultat", arg: String(block.tool_use_id ?? ""), body: code(textOf(block.content)) }, block.is_error === true, takeRaw()) });
+      items.push({ html: toolRow({ icon: "term", verb: "Result", arg: String(block.tool_use_id ?? ""), body: code(textOf(block.content)) }, block.is_error === true, takeRaw()) });
     } else if (block.type === "thinking") {
       const thought = String(block.thinking ?? "").trim();
-      if (thought) items.push({ html: toolRow({ icon: "think", verb: "Réflexion", prose: true, arg: thought.split("\n")[0]!.replace(/[#*_`>]/g, "").trim(), body: `<div class="rtxt">${markdownHtml(thought)}</div>` }, false, takeRaw()) });
+      if (thought) items.push({ html: toolRow({ icon: "think", verb: "Thinking", prose: true, arg: thought.split("\n")[0]!.replace(/[#*_`>]/g, "").trim(), body: `<div class="rtxt">${markdownHtml(thought)}</div>` }, false, takeRaw()) });
     } else if (block.type === "redacted_thinking") {
       continue;
     } else if (block.type === "image") {
-      items.push({ html: '<span class="md-img">Image jointe</span>' });
+      items.push({ html: '<span class="md-img">Attached image</span>' });
     } else if (block.type === "text" && data.type === "assistant") {
       items.push({ html: answer ? markdownHtml(String(block.text ?? "")) : `<div class="say">${markdownHtml(String(block.text ?? ""))}</div>` });
     } else if (block.type === "text") {
-      items.push({ html: `<details class="reason context"><summary>${icon("chev")}Contexte ${time}</summary><pre class="code">${clip(String(block.text ?? ""))}</pre>${raw(takeRaw())}</details>` });
+      items.push({ html: `<details class="reason context"><summary>${icon("chev")}Context ${time}</summary><pre class="code">${clip(String(block.text ?? ""))}</pre>${raw(takeRaw())}</details>` });
     } else {
-      items.push({ html: toolRow({ icon: "term", verb: String(block.type || "Bloc"), body: `<pre class="code">${e(JSON.stringify(block, null, 2))}</pre>` }, false, takeRaw()) });
+      items.push({ html: toolRow({ icon: "term", verb: String(block.type || "Block"), body: `<pre class="code">${e(JSON.stringify(block, null, 2))}</pre>` }, false, takeRaw()) });
     }
   }
   if (rawPending && !answer) items.push({ html: raw([line]) });
   return items;
 }
 
-/** Consecutive read-only tools fold into one "Exploré" line; errors, edits and commands never do. */
+/** Consecutive read-only tools fold into one "Explored" line; errors, edits and commands never do. */
 function grouped(items: Item[]): string {
   let html = "";
   for (let i = 0; i < items.length;) {
@@ -163,8 +163,8 @@ function grouped(items: Item[]): string {
     if (j - i >= 2) {
       const run = items.slice(i, j);
       const files = run.filter((x) => x.read === "file").length, searches = run.length - files;
-      const label = [files && plural(files, "fichier"), searches && plural(searches, "recherche")].filter(Boolean).join(", ");
-      html += `<details class="tool tgroup"><summary><span class="ticon">${icon("layers")}</span><span class="tverb">Exploré</span><span class="targ">${label}</span><span class="tchev">${icon("chev")}</span></summary><div class="tlist">${run.map((x) => x.html).join("")}</div></details>`;
+      const label = [files && plural(files, "file"), searches && plural(searches, "search", "searches")].filter(Boolean).join(", ");
+      html += `<details class="tool tgroup"><summary><span class="ticon">${icon("layers")}</span><span class="tverb">Explored</span><span class="targ">${label}</span><span class="tchev">${icon("chev")}</span></summary><div class="tlist">${run.map((x) => x.html).join("")}</div></details>`;
       i = j;
     } else html += items[i++]!.html;
   }
@@ -234,10 +234,10 @@ async function readConversation(env: Env, id: string) {
       turns++;
       const value = prompt.data.message?.content;
       const images = Array.isArray(value) ? value.filter((b) => b?.type === "image").length : 0;
-      titles.push(promptText(value).replace(/[#*_`>]/g, "").replace(/\s+/g, " ").trim().slice(0, 90) || (images ? plural(images, "image jointe") : "Sans texte"));
+      titles.push(promptText(value).replace(/[#*_`>]/g, "").replace(/\s+/g, " ").trim().slice(0, 90) || (images ? plural(images, "attached image") : "No text"));
       html += `<article class="turn me" data-role="user"><span class="avatar lg" aria-hidden="true">U</span><div class="col">
-        <div class="meta-l"><b>Utilisateur</b><a href="#t${turns}">Tour ${turns}</a>${prompt.data.timestamp ? dateLabel(prompt.data.timestamp) : ""}</div>
-        <div class="bubble">${markdownHtml(promptText(value))}${images ? `<span class="md-img">${plural(images, "image jointe")}</span>` : ""}</div>${raw([prompt.raw])}</div></article>`;
+        <div class="meta-l"><b>User</b><a href="#t${turns}">Turn ${turns}</a>${prompt.data.timestamp ? dateLabel(prompt.data.timestamp) : ""}</div>
+        <div class="bubble">${markdownHtml(promptText(value))}${images ? `<span class="md-img">${plural(images, "attached image")}</span>` : ""}</div>${raw([prompt.raw])}</div></article>`;
     }
     const steps = records.slice(start, end).filter((_, i) => start + i !== final && !(prompt && i === 0));
     if (steps.length) {
@@ -246,10 +246,10 @@ async function readConversation(env: Env, id: string) {
       total.tools += stats.tools; total.edits += stats.edits; total.errors += stats.errors;
       const elapsed = Date.parse(records[end - 1]!.data.timestamp || "") - Date.parse(prompt?.data.timestamp || "");
       const minutes = Math.floor(elapsed / 60000);
-      const duration = minutes < 1 ? "moins d'une minute" : minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
-      const label = Number.isFinite(elapsed) && elapsed >= 0 ? `A travaillé pendant ${duration}` : "Étapes intermédiaires";
-      const pills = [stats.tools ? plural(stats.tools, "outil") : plural(steps.length, "étape"), stats.edits && plural(stats.edits, "modif")]
-        .filter(Boolean).map((p) => `<span class="pill">${p}</span>`).join("") + (stats.errors ? `<span class="pill bad">${plural(stats.errors, "erreur")}</span>` : "");
+      const duration = minutes < 1 ? "less than a minute" : minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
+      const label = Number.isFinite(elapsed) && elapsed >= 0 ? `Worked for ${duration}` : "Intermediate steps";
+      const pills = [stats.tools ? plural(stats.tools, "tool") : plural(steps.length, "step"), stats.edits && plural(stats.edits, "edit")]
+        .filter(Boolean).map((p) => `<span class="pill">${p}</span>`).join("") + (stats.errors ? `<span class="pill bad">${plural(stats.errors, "error")}</span>` : "");
       html += `<details class="worked"><summary>${icon("chev")}<span>${e(label)}</span>${pills}</summary><div>${body}</div></details>`;
     }
     if (final >= 0) {
@@ -258,7 +258,7 @@ async function readConversation(env: Env, id: string) {
         <div class="meta-l"><b>${harness}</b>${answer.data.timestamp ? dateLabel(answer.data.timestamp) : ""}</div>
         <div class="answer">${grouped(recordItems(answer, results, calls, total, true))}</div>${raw([answer.raw])}</div></article>`;
     }
-    conversation += prompt ? `<section class="tturn" id="t${turns}" aria-label="Tour ${turns}">${html}</section>` : html;
+    conversation += prompt ? `<section class="tturn" id="t${turns}" aria-label="Turn ${turns}">${html}</section>` : html;
   }
   return { harness, records, invalid, usages, tokens, conversation, turns, titles, ...total };
 }
@@ -268,7 +268,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
   const id = params.id!;
   const session = await env.DB.prepare(`SELECT * FROM sessions WHERE id = ? AND ${VISIBLE} AND ${MEMBER}`)
     .bind(id, visibleSince(), who.email).first<Record<string, string | number | null>>();
-  if (!session) return page("Session introuvable", "<h1>Session introuvable</h1>", 404);
+  if (!session) return page("Session not found", "<h1>Session not found</h1>", 404);
   const projects = await getProjectSummaries(env, who.email);
   const project = projects.find(p => p.slug === session.project)!;
   const projectHref = `/projects/${encodeURIComponent(String(session.project))}`;
@@ -292,86 +292,86 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
   const hosted = Number(session.segment_count) > 0;
   const transcript = !hosted ? { harness: "Claude", records: [] as TranscriptRecord[], invalid: 0, usages: new Map<string, Record<string, number>>(), tokens: 0, conversation: "", turns: 0, titles: [] as string[], tools: 0, edits: 0, errors: 0 }
     : await readConversation(env, id);
-  if (!transcript) return page("Transcript indisponible", "<h1>Transcript indisponible</h1>", 503);
+  if (!transcript) return page("Transcript unavailable", "<h1>Transcript unavailable</h1>", 503);
   const { harness, records, invalid, usages, tokens, conversation, turns, titles, tools } = transcript;
   const canManage = canManageSession(await roleIn(env, String(session.project), who.email), String(session.owner_email), who.email);
   const destinations = canManage ? (await env.DB.prepare(`SELECT p.slug, p.name FROM projects p
     JOIN project_members m ON m.project = p.slug WHERE m.email = lower(?) AND m.role IN ('owner', 'writer') AND p.slug != ? ORDER BY p.name`)
     .bind(who.email, session.project).all<{ slug: string; name: string }>()).results : [];
-  const movePanel = destinations.length ? `<details class="panel"><summary>Changer de projet<span class="tchev">${icon("chev")}</span></summary>
+  const movePanel = destinations.length ? `<details class="panel"><summary>Change project<span class="tchev">${icon("chev")}</span></summary>
     <div class="pb project-settings"><form data-session-move="${e(id)}">
-      <label class="f">Projet de destination<select name="project" required aria-label="Projet de destination">
+      <label class="f">Destination project<select name="project" required aria-label="Destination project">
         ${destinations.map(p => `<option value="${e(p.slug)}">${e(p.name)} (${e(p.slug)})</option>`).join("")}
       </select></label>
-      <p class="hint">Les membres du projet de destination auront accès à cette session. L’auteur devra y avoir le droit d’écriture pour continuer la synchronisation. Les forks et suites existants restent dans leur projet.</p>
-      <p role="alert" data-move-error hidden></p><button class="btn" type="submit" disabled>Déplacer la session</button>
+      <p class="hint">Members of the destination project will get access to this session. The author needs write access there to keep syncing. Existing forks and continuations stay in their project.</p>
+      <p role="alert" data-move-error hidden></p><button class="btn" type="submit" disabled>Move session</button>
     </form></div></details>` : "";
   const command = `/share-session pull ${id}`;
   const app = session.external_app ? appName(session.external_app) : null;
   const expires = session.external_expires_at === null ? null : Number(session.external_expires_at);
   const expired = expires !== null && expires <= Date.now();
-  const resume = (primary: boolean) => `<button class="btn${primary ? " primary" : ""}" type="button" data-copy="${e(command)}">${icon("branch")}Reprendre</button>`;
+  const resume = (primary: boolean) => `<button class="btn${primary ? " primary" : ""}" type="button" data-copy="${e(command)}">${icon("branch")}Resume</button>`;
   // A relay opens the hosting app (the only place to interact); its transcript, when uploaded, can also be resumed.
   const action = !app ? resume(true)
-    : (expired ? '<button class="btn primary" type="button" disabled data-expired>Lien expiré</button>'
-      : `<a class="btn primary" href="${e(session.external_url)}" target="_blank" rel="noopener noreferrer">${icon("chat")}Ouvrir dans ${e(app)}</a>`)
+    : (expired ? '<button class="btn primary" type="button" disabled data-expired>Link expired</button>'
+      : `<a class="btn primary" href="${e(session.external_url)}" target="_blank" rel="noopener noreferrer">${icon("chat")}Open in ${e(app)}</a>`)
       + (hosted ? resume(false) : "");
   const done = session.done_at !== null;
-  const doneLabel = done ? `<span>Terminée ${dateLabel(Number(session.done_at), true)}</span>` : "<span>En cours</span>";
+  const doneLabel = done ? `<span>Done ${dateLabel(Number(session.done_at), true)}</span>` : "<span>In progress</span>";
   // The pill is both the state and its toggle; readers without rights only see a closed session's state.
-  const statusPill = canManage ? `<button class="status-pill${done ? " is-done" : ""}" type="button" data-session-status="${e(id)}" data-status="${done ? "active" : "done"}" disabled>${statusIcon(done, false)}${doneLabel}<span class="act">${done ? "Rouvrir" : "Marquer terminée"}</span></button>`
+  const statusPill = canManage ? `<button class="status-pill${done ? " is-done" : ""}" type="button" data-session-status="${e(id)}" data-status="${done ? "active" : "done"}" disabled>${statusIcon(done, false)}${doneLabel}<span class="act">${done ? "Reopen" : "Mark as done"}</span></button>`
     : done ? `<span class="status-pill is-done">${statusIcon(true, false)}${doneLabel}</span>` : "";
   const model = session.model || records.find((r) => r.data.message?.model)?.data.message?.model;
   const meta = (label: string, value: unknown, mono = false) => value == null || value === "" ? "" : `<dt>${label}</dt><dd${mono ? ' class="mono"' : ""}>${e(value)}</dd>`;
   return page(String(session.title || id), `<div class="detail">
     <header class="dhead${done ? " is-done" : ""}">${statusPill}<h1>${e(session.title || id)}</h1>
-      <details class="hmeta"><summary>${icon("chev")}Détails${hosted ? ` · ${tokens} tokens · ${records.length} messages · ${plural(turns, "tour")} · ${plural(tools, "outil")}` : ""}</summary>
+      <details class="hmeta"><summary>${icon("chev")}Details${hosted ? ` · ${tokens} tokens · ${records.length} messages · ${plural(turns, "turn")} · ${plural(tools, "tool")}` : ""}</summary>
       ${session.summary ? `<p class="sum">${e(session.summary)}</p>` : ""}
       <div class="line">${author(session.owner_name, session.owner_email)}
         ${app ? `<span class="badge">${e(app)}</span>` : ""}
-        <span class="badge">synchro ${dateLabel(Number(session.last_synced_at), true)}</span>
+        <span class="badge">synced ${dateLabel(Number(session.last_synced_at), true)}</span>
         <span class="badge mono">${icon("folder")}${e(session.project)}</span>
         ${session.repo ? `<span class="badge mono">${icon("term")}${e(session.repo)}</span>` : ""}
         ${session.branch ? `<span class="badge mono">${icon("branch")}${e(session.branch)}</span>` : ""}
         ${model ? `<span class="chip">${icon("chip")}${e(model)}</span>` : ""}
-        ${session.continued_from ? `<span class="badge">${icon("branch")}suite de <a href="/s/${e(encodeURIComponent(String(session.continued_from)))}">${e(session.continued_from)}</a></span>` : ""}
-        ${continuation ? `<span class="badge">${icon("branch")}suite dans <a href="/s/${e(encodeURIComponent(String(continuation.id)))}">${e(continuation.id)}</a></span>` : ""}
-        ${session.forked_from ? `<span class="badge">${icon("branch")}forké depuis <a href="/s/${e(encodeURIComponent(String(session.forked_from)))}">${e(session.forked_from)}</a> · ${e(session.forked_from_owner)}</span>` : ""}
+        ${session.continued_from ? `<span class="badge">${icon("branch")}continues <a href="/s/${e(encodeURIComponent(String(session.continued_from)))}">${e(session.continued_from)}</a></span>` : ""}
+        ${continuation ? `<span class="badge">${icon("branch")}continued in <a href="/s/${e(encodeURIComponent(String(continuation.id)))}">${e(continuation.id)}</a></span>` : ""}
+        ${session.forked_from ? `<span class="badge">${icon("branch")}forked from <a href="/s/${e(encodeURIComponent(String(session.forked_from)))}">${e(session.forked_from)}</a> · ${e(session.forked_from_owner)}</span>` : ""}
       </div>
       </details>
-      ${session.owner_email !== who.email && hosted ? `<p class="ro-note">Lecture seule : session de ${e(session.owner_email)}. Si vous la reprenez, la copie sera à votre nom.</p>` : ""}
+      ${session.owner_email !== who.email && hosted ? `<p class="ro-note">Read-only: ${e(session.owner_email)}’s session. If you resume it, the copy will be yours.</p>` : ""}
       ${canManage ? '<p class="ro-note" role="alert" data-status-error hidden></p>' : ""}
       <div class="actionbar gutter"><div class="in">${action}</div></div>
     </header>
-    <aside class="side" aria-label="Informations de la session">
-      <details class="panel" data-meta open><summary>Informations<span class="tchev">${icon("chev")}</span></summary><div class="pb"><dl class="meta">
-        ${meta("Auteur", session.owner_email)}${meta("Projet", session.project, true)}${meta("Repo", session.repo, true)}${meta("Branche", session.branch, true)}
-        ${meta("Dossier d’origine", session.cwd_base, true)}${meta("Modèle", model)}${meta(harness === "Codex" ? "Codex" : "Claude Code", session.cc_version)}
-        <dt>Créée</dt><dd>${dateLabel(Number(session.created_at))}</dd>
-        <dt>Mise à jour</dt><dd>${dateLabel(Number(session.updated_at))}</dd>
-        <dt>Dernière synchro</dt><dd>${dateLabel(Number(session.last_synced_at))}</dd>
-        ${app ? `${meta("Hébergée par", app)}${expires === null ? "" : `<dt>Lien valable jusqu’au</dt><dd>${dateLabel(expires)}</dd>`}` : ""}
+    <aside class="side" aria-label="Session information">
+      <details class="panel" data-meta open><summary>Information<span class="tchev">${icon("chev")}</span></summary><div class="pb"><dl class="meta">
+        ${meta("Author", session.owner_email)}${meta("Project", session.project, true)}${meta("Repo", session.repo, true)}${meta("Branch", session.branch, true)}
+        ${meta("Original folder", session.cwd_base, true)}${meta("Model", model)}${meta(harness === "Codex" ? "Codex" : "Claude Code", session.cc_version)}
+        <dt>Created</dt><dd>${dateLabel(Number(session.created_at))}</dd>
+        <dt>Updated</dt><dd>${dateLabel(Number(session.updated_at))}</dd>
+        <dt>Last synced</dt><dd>${dateLabel(Number(session.last_synced_at))}</dd>
+        ${app ? `${meta("Hosted by", app)}${expires === null ? "" : `<dt>Link valid until</dt><dd>${dateLabel(expires)}</dd>`}` : ""}
         ${!hosted ? meta("Messages", session.msg_count || null)
-          : `${meta("Messages", records.length)}${meta("Tokens", tokens)}${meta("Réponses API", usages.size)}${meta("Taille", `${Number(session.bytes)} octets`)}`}${meta("Identifiant", id, true)}
+          : `${meta("Messages", records.length)}${meta("Tokens", tokens)}${meta("API responses", usages.size)}${meta("Size", `${Number(session.bytes)} bytes`)}`}${meta("ID", id, true)}
       </dl></div></details>
-      ${!hosted ? "" : `<details class="panel"><summary>Commande de reprise<span class="tchev">${icon("chev")}</span></summary><div class="pb resume-help">
-        <p class="hint">Collez cette commande dans Claude Code ou Codex, ouvert dans votre copie de <span class="mono">${e(session.repo || session.project)}</span>.</p>
+      ${!hosted ? "" : `<details class="panel"><summary>Resume command<span class="tchev">${icon("chev")}</span></summary><div class="pb resume-help">
+        <p class="hint">Paste this command into Claude Code or Codex, opened in your copy of <span class="mono">${e(session.repo || session.project)}</span>.</p>
         <div class="cmd"><code id="resume-command">${e(command)}</code></div>
-        <p class="hint">La copie sera une nouvelle session à votre nom. Celle-ci reste intacte.</p>
+        <p class="hint">The copy will be a new session under your name. This one stays intact.</p>
       </div></details>`}
       ${movePanel}
     </aside>
     ${!hosted ? "" : `<section class="chat transcript" id="conversation" tabindex="0" aria-label="Conversation"><div class="chat-head"><h2 class="chat-title">Conversation</h2>
-      <div class="levels" role="group" aria-label="Niveau de détail" data-levels hidden><button type="button" data-level="conv">Conversation</button><button type="button" data-level="normal">Normal</button><button type="button" data-level="full">Détaillé</button></div></div>
-      ${turns > 1 ? `<nav class="turnrail" aria-label="Tours de la conversation" tabindex="0" data-rail><div class="ticks" aria-hidden="true">${titles.map(() => "<i></i>").join("")}</div>
+      <div class="levels" role="group" aria-label="Detail level" data-levels hidden><button type="button" data-level="conv">Conversation</button><button type="button" data-level="normal">Normal</button><button type="button" data-level="full">Detailed</button></div></div>
+      ${turns > 1 ? `<nav class="turnrail" aria-label="Conversation turns" tabindex="0" data-rail><div class="ticks" aria-hidden="true">${titles.map(() => "<i></i>").join("")}</div>
         <ol class="rail-list">${titles.map((t, i) => `<li><a href="#t${i + 1}" data-turn-link><span class="n">${i + 1}</span><span class="tt">${e(t)}</span></a></li>`).join("")}</ol></nav>` : ""}
-      ${invalid ? `<p class="ro-note">${invalid} ligne(s) JSONL invalide(s) ignorée(s).</p>` : ""}
-      ${conversation || '<p class="empty">Aucun message.</p>'}
+      ${invalid ? `<p class="ro-note">${invalid} invalid JSONL line(s) skipped.</p>` : ""}
+      ${conversation || '<p class="empty">No messages.</p>'}
     </section>`}</div>`, 200, true, {
       active: "projects", projects, email: who.email, currentProject: String(session.project), backHref,
-      backLabel: backHref.startsWith("/sessions") ? "Toutes les sessions" : project?.name || String(session.project),
+      backLabel: backHref.startsWith("/sessions") ? "All sessions" : project?.name || String(session.project),
       breadcrumbs: [
-        { label: "Accueil", href: "/" }, { label: "Projets", href: "/projects" },
+        { label: "Home", href: "/" }, { label: "Projects", href: "/projects" },
         { label: project?.name || String(session.project), href: backHref.startsWith(projectHref) ? backHref : projectHref },
         { label: String(session.title || id) },
       ],

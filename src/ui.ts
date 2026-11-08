@@ -15,7 +15,7 @@ export const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 const styles = `
-/* Langage shadcn/ui, thème zinc. Mobile first : liste = cartes pleine largeur ; détail = conversation façon messagerie, barre d'action collante en bas. */
+/* shadcn/ui language, zinc theme. Mobile first: list = full-width cards; detail = messaging-style conversation, sticky action bar at the bottom. */
 :root{
   /* Tokens shadcn (HSL sans hsl()), palette zinc quasi monochrome */
   --background:0 0% 100%; --foreground:240 10% 3.9%;
@@ -30,7 +30,7 @@ const styles = `
   /* Statuts discrets, hors palette neutre */
   --success:142.1 70.6% 40%; --warning:32 95% 38%; --warning-bg:48 96% 92%;
   --overlay:0 0% 0% / .5; --shadow-sm:0 1px 2px 0 rgb(0 0 0 / .05); --shadow-md:0 4px 12px -2px rgb(0 0 0 / .08);
-  /* Coloration de code volontairement discrète */
+  /* Deliberately subtle code highlighting */
   --c-str:25 60% 36%; --c-kw:240 5.9% 10%; --c-num:240 5% 34%; --c-com:240 3.8% 56%; --c-add:142.1 70.6% 30%; --c-del:0 72.2% 45%;
   --f-sans:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -152,7 +152,7 @@ button.status-pill:disabled{opacity:.5;cursor:wait}
 .av-ai{background:hsl(var(--primary));color:hsl(var(--primary-foreground))}
 .author{display:inline-flex;gap:6px;align-items:center;min-width:0;overflow-wrap:anywhere}
 
-/* Détail */
+/* Detail */
 .detail{display:flex;flex-direction:column;gap:16px;min-width:0}
 .dhead{display:flex;flex-direction:column;gap:12px;min-width:0}
 .dhead h1{font-size:22px;line-height:1.25}
@@ -169,7 +169,7 @@ button.status-pill:disabled{opacity:.5;cursor:wait}
 .hmeta>summary svg{width:14px;height:14px;transition:transform .2s}
 .hmeta[open]>summary svg{transform:rotate(180deg)}
 .hmeta>:not(summary){margin-top:10px}
-/* Mobile: the one "Détails" toggle also hides the side panels so the conversation gets the screen. */
+/* Mobile: the one "Details" toggle also hides the side panels so the conversation gets the screen. */
 .detail:has(.hmeta:not([open])) .side{display:none}
 .ro-note{font-size:13px;color:hsl(var(--foreground));border:1px solid hsl(var(--border));border-radius:var(--radius);padding:12px 14px;margin:0;background:hsl(var(--muted) / .5)}
 
@@ -201,7 +201,7 @@ dl.meta dd{margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .row{display:flex;gap:8px;flex-wrap:wrap}
 .row .btn{flex:1}
 
-/* Conversation façon messagerie (chat shadcn) */
+/* Messaging-style conversation (shadcn chat) */
 .chat{display:flex;flex-direction:column;gap:20px;min-width:0}
 .transcript{max-height:max(8rem,calc(100vh - var(--transcript-top,20rem) - var(--transcript-bottom,104px)));max-height:max(8rem,calc(var(--transcript-viewport,100dvh) - var(--transcript-top,20rem) - var(--transcript-bottom,104px)));overflow-y:auto;overscroll-behavior-y:contain;scroll-margin-top:80px;scroll-margin-bottom:var(--transcript-bottom,104px);padding:2px}
 .transcript>*{flex-shrink:0}
@@ -221,10 +221,10 @@ dl.meta dd{margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .answer,.say{min-width:0}
 .tturn{display:flex;flex-direction:column;gap:12px;min-width:0;scroll-margin-top:64px}
 
-/* En-tête de conversation : titre, navigation entre tours, niveau de détail */
+/* Conversation header: title, turn navigation, detail level */
 .chat-head{position:sticky;top:-2px;z-index:2;background:hsl(var(--card));display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:6px 0;margin-bottom:-8px}
 .chat-head .chat-title{flex:1;margin:0;white-space:nowrap}
-/* Rail des tours : traits à gauche, titres au survol ou au focus, clic = saut au prompt */
+/* Turn rail: ticks on the left, titles on hover or focus, click = jump to prompt */
 .transcript>:not(.chat-head,.turnrail){width:100%;max-width:820px;margin-inline:auto}
 .transcript:has(.turnrail){padding-left:20px}
 .turnrail{position:sticky;top:56px;z-index:3;align-self:flex-start;width:0;height:0;margin-bottom:-20px;outline:0}
@@ -256,7 +256,7 @@ details:is(.reason,.worked)[open]>summary>svg{transform:rotate(90deg)}
 .pill{display:inline-flex;align-items:center;font-size:12px;font-weight:500;line-height:20px;padding:0 8px;border-radius:999px;background:hsl(var(--muted));color:hsl(var(--muted-foreground))}
 .pill.bad{background:hsl(var(--destructive) / .1);color:hsl(var(--destructive-text))}
 
-/* Étapes : une ligne par outil sur une ligne de temps */
+/* Steps: one line per tool on a timeline */
 details.worked>div{position:relative;display:flex;flex-direction:column;gap:2px;padding:4px 0 8px;min-width:0}
 details.worked>div::before{content:"";position:absolute;left:19px;top:8px;bottom:8px;width:1px;background:hsl(var(--border))}
 details.worked>div>:is(.say,.reason,.raw){position:relative;padding-left:42px}
@@ -296,7 +296,7 @@ pre.diff>span{display:block;padding:0 12px;min-width:max-content}
 .todo .completed .box{background:hsl(var(--foreground));border-color:hsl(var(--foreground))}
 .todo .in_progress .box{border-color:hsl(var(--foreground));border-width:2px}
 
-/* Markdown des prompts et réponses */
+/* Markdown for prompts and answers */
 .md{font-size:15px;line-height:1.65;overflow-wrap:anywhere;min-width:0}
 .md>:first-child{margin-top:0}
 .md :is(p,ul,ol,blockquote,.cb,.tblw){margin:0 0 12px}
@@ -693,7 +693,7 @@ export type IconName = keyof typeof icons;
 /** SVG paths are static; metadata never enters SVG markup. */
 export const icon = (name: IconName) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${icons[name]}</svg>`;
 /** Session status mark: half ring while active, filled check once done. Decorative inside a labelled control. */
-export const statusIcon = (done: boolean, labelled = true) => `<svg class="st${done ? " is-done" : ""}" viewBox="0 0 16 16" ${labelled ? `role="img" aria-label="${done ? "Terminée" : "En cours"}"` : 'aria-hidden="true"'}>${done
+export const statusIcon = (done: boolean, labelled = true) => `<svg class="st${done ? " is-done" : ""}" viewBox="0 0 16 16" ${labelled ? `role="img" aria-label="${done ? "Done" : "In progress"}"` : 'aria-hidden="true"'}>${done
   ? '<circle cx="8" cy="8" r="7" fill="currentColor"/><path class="st-check" d="M4.9 8.2l2.1 2.1 4.1-4.6" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>'
   : '<circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 3.5a4.5 4.5 0 0 1 0 9z" fill="currentColor"/>'}</svg>`;
 /** Display name of the app hosting a relayed session. */
@@ -707,16 +707,16 @@ export function dateLabel(value: unknown, relative = false): string {
   if (!Number.isFinite(date.getTime())) return "";
   const minutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000));
   const label = relative
-    ? minutes < 60 ? `il y a ${minutes} min` : minutes < 1440 ? `il y a ${Math.floor(minutes / 60)} h` : `il y a ${Math.floor(minutes / 1440)} j`
-    : date.toLocaleString("fr-FR", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) + " UTC";
+    ? minutes < 60 ? `${minutes} min ago` : minutes < 1440 ? `${Math.floor(minutes / 60)} h ago` : `${Math.floor(minutes / 1440)} d ago`
+    : date.toLocaleString("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) + " UTC";
   return `<time datetime="${date.toISOString()}" title="${date.toISOString()}">${escapeHtml(label)}</time>`;
 }
 
 function navigationShell(body: string, detail: boolean, options: NavigationOptions): string {
   const destinations = [
-    { key: "home", href: "/", label: "Accueil", mobile: "Accueil", icon: "home" },
-    { key: "projects", href: "/projects", label: "Projets", mobile: "Projets", icon: "folder" },
-    { key: "sessions", href: "/sessions", label: "Toutes les sessions", mobile: "Sessions", icon: "chat" },
+    { key: "home", href: "/", label: "Home", mobile: "Home", icon: "home" },
+    { key: "projects", href: "/projects", label: "Projects", mobile: "Projects", icon: "folder" },
+    { key: "sessions", href: "/sessions", label: "All sessions", mobile: "Sessions", icon: "chat" },
   ] as const;
   const links = (mobile = false) => destinations.map((item) => `<a href="${item.href}"${options.active === item.key ? ' aria-current="page"' : ""}>${icon(item.icon)}${mobile ? item.mobile : item.label}</a>`).join("");
   const breadcrumbs = options.breadcrumbs.map((crumb, index) => `${index ? icon("back") : ""}${crumb.href
@@ -729,24 +729,24 @@ function navigationShell(body: string, detail: boolean, options: NavigationOptio
     return `<a class="side-project${selected ? " selected" : ""}" href="${escapeHtml(href)}"><span class="project-dot ${tones[index]}" aria-hidden="true"></span><span class="project-name">${escapeHtml(project.name)}</span><span class="count">${escapeHtml(project.sessions)}</span></a>`;
   }).join("");
   const back = detail && options.backHref
-    ? `<a class="nav-back" data-list-back href="${escapeHtml(options.backHref)}" title="${escapeHtml(options.backLabel || "Retour aux sessions")}">${icon("back")}<span>${escapeHtml(options.backLabel || "Retour aux sessions")}</span></a>`
+    ? `<a class="nav-back" data-list-back href="${escapeHtml(options.backHref)}" title="${escapeHtml(options.backLabel || "Back to sessions")}">${icon("back")}<span>${escapeHtml(options.backLabel || "Back to sessions")}</span></a>`
     : "";
-  return `<a class="skip-link" href="#${detail ? "view" : "home"}">Aller au contenu</a>
-<div class="shell"><aside class="sidebar" aria-label="Espace partagé">
+  return `<a class="skip-link" href="#${detail ? "view" : "home"}">Skip to content</a>
+<div class="shell"><aside class="sidebar" aria-label="Shared space">
   <a class="brand" href="/"><span class="brand-icon">${icon("chat")}</span>Session Share</a>
-  <nav class="nav" aria-label="Navigation principale">${links()}</nav>
-  ${projects ? `<section class="side-section" aria-label="Projets récents"><div class="side-label">Projets récents <a href="/projects">Tous</a></div>${projects}</section>` : ""}
-  <div class="sidebar-bottom"><a class="help-link" href="#share-help">${icon("info")}Partager une session</a>
+  <nav class="nav" aria-label="Main navigation">${links()}</nav>
+  ${projects ? `<section class="side-section" aria-label="Recent projects"><div class="side-label">Recent projects <a href="/projects">All</a></div>${projects}</section>` : ""}
+  <div class="sidebar-bottom"><a class="help-link" href="#share-help">${icon("info")}Share a session</a>
     ${options.email ? `<div class="profile"><span class="avatar" aria-hidden="true">${escapeHtml(initials(options.email))}</span><small>${escapeHtml(options.email)}</small></div>` : ""}
   </div>
 </aside><div class="shell-main"><header class="topbar">
   ${back || `<a class="mobile-brand" href="/">${icon("chat")}Session Share</a>`}
-  <nav class="crumb" aria-label="Fil d’Ariane">${breadcrumbs}</nav>
-  <form class="global-search" method="get" action="/sessions" role="search"><label class="sr" for="global-q">Rechercher dans toutes les sessions</label><input id="global-q" name="q" type="search" placeholder="Rechercher une session…"><button type="submit" aria-label="Rechercher dans toutes les sessions">${icon("search")}</button></form>
+  <nav class="crumb" aria-label="Breadcrumb">${breadcrumbs}</nav>
+  <form class="global-search" method="get" action="/sessions" role="search"><label class="sr" for="global-q">Search all sessions</label><input id="global-q" name="q" type="search" placeholder="Search sessions…"><button type="submit" aria-label="Search all sessions">${icon("search")}</button></form>
 </header><main class="content" id="${detail ? "view" : "home"}" tabindex="-1">${body}
-  <footer class="installation" aria-label="Installer le skill Session Share"><details class="panel share-help" id="share-help"><summary>${icon("info")}Partager une session<span class="tchev">${icon("chev")}</span></summary><div class="pb">
-    <p>Pour partager une conversation, ajoutez le skill dans Claude (Paramètres → Capacités → Skills) ou dézippez-le dans <code>~/.claude/skills/</code>, puis lancez <code>/share-session</code>.</p>
-    <a class="btn" href="/share-session.skill" download>Télécharger le skill <span class="mono">share-session.skill</span></a>
+  <footer class="installation" aria-label="Install the Session Share skill"><details class="panel share-help" id="share-help"><summary>${icon("info")}Share a session<span class="tchev">${icon("chev")}</span></summary><div class="pb">
+    <p>To share a conversation, add the skill in Claude (Settings → Capabilities → Skills) or unzip it into <code>~/.claude/skills/</code>, then run <code>/share-session</code>.</p>
+    <a class="btn" href="/share-session.skill" download>Download the skill <span class="mono">share-session.skill</span></a>
   </div></details></footer>
 </main></div></div>
 <nav class="mobile-nav" id="mobile-nav" aria-label="Navigation mobile">${links(true)}</nav>`;
@@ -754,7 +754,7 @@ function navigationShell(body: string, detail: boolean, options: NavigationOptio
 
 export function page(title: string, body: string, status = 200, detail = false, options?: NavigationOptions): Response {
   const nonce = crypto.randomUUID();
-  return new Response(`<!doctype html><html lang="fr"><head><meta charset="utf-8">
+  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>${escapeHtml(title)}</title>
 <style>${styles}</style></head>
 <body${options ? ` class="has-navigation${detail ? " is-detail" : ""}"` : detail ? ' class="is-detail"' : ""}>
@@ -776,11 +776,11 @@ if(shareHelp){
   for(const link of document.querySelectorAll('[href="#share-help"]'))link.addEventListener('click',()=>{shareHelp.open=true;});
 }
 for(const button of document.querySelectorAll('[data-copy]'))button.addEventListener('click',async()=>{
-  try{await navigator.clipboard.writeText(button.dataset.copy);notify('Commande copiée');}
+  try{await navigator.clipboard.writeText(button.dataset.copy);notify('Command copied');}
   catch{
     const command=document.getElementById('resume-command');
     if(command){command.closest('details').open=true;const range=document.createRange();range.selectNodeContents(command);const selection=window.getSelection();if(selection){selection.removeAllRanges();selection.addRange(range);}command.scrollIntoView({block:'center'});}
-    notify('Copie indisponible : sélectionnez la commande et copiez-la manuellement.');
+    notify('Copy unavailable: select the command and copy it manually.');
   }
 });
 const wide=window.matchMedia('(min-width:1000px)');
@@ -816,7 +816,7 @@ if(conversation){
     levels.addEventListener('click',event=>{const b=event.target.closest('[data-level]');if(b)setLevel(b.dataset.level);});
   }
   for(const button of conversation.querySelectorAll('[data-copy-code]'))button.addEventListener('click',async()=>{
-    try{await navigator.clipboard.writeText(button.closest('.cb').querySelector('code').textContent);notify('Code copié');}catch{notify('Copie indisponible.');}
+    try{await navigator.clipboard.writeText(button.closest('.cb').querySelector('code').textContent);notify('Code copied');}catch{notify('Copy unavailable.');}
   });
   // Turn rail: ticks plus titles; the current turn follows the scroll, the page opens on the last turn.
   const turns=[...conversation.querySelectorAll('.tturn')];
@@ -867,9 +867,9 @@ if(moveForm){
       const response=await fetch('/api/sessions/'+encodeURIComponent(moveForm.dataset.sessionMove)+'/project',{
         method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:moveForm.elements.project.value})
       });
-      if(!response.ok){const result=await response.json();throw new Error(result.error||'Déplacement impossible.');}
+      if(!response.ok){const result=await response.json();throw new Error(result.error||'Move failed.');}
       window.location.reload();
-    }catch(reason){error.textContent=reason instanceof Error?reason.message:'Déplacement impossible. Réessayez.';error.hidden=false;}
+    }catch(reason){error.textContent=reason instanceof Error?reason.message:'Move failed. Try again.';error.hidden=false;}
     finally{button.disabled=false;}
   });
 }
@@ -884,9 +884,9 @@ if(statusButton){
       const response=await fetch('/api/sessions/'+encodeURIComponent(statusButton.dataset.sessionStatus)+'/status',{
         method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:statusButton.dataset.status})
       });
-      if(!response.ok){const result=await response.json();throw new Error(result.error||'Modification impossible.');}
+      if(!response.ok){const result=await response.json();throw new Error(result.error||'Update failed.');}
       window.location.reload();
-    }catch(reason){error.textContent=reason instanceof Error?reason.message:'Modification impossible. Réessayez.';error.hidden=false;}
+    }catch(reason){error.textContent=reason instanceof Error?reason.message:'Update failed. Try again.';error.hidden=false;}
     finally{statusButton.disabled=false;}
   });
 }
@@ -902,9 +902,9 @@ if(projectSettings){
       const response=await fetch('/api/projects/'+encodeURIComponent(projectSettings.dataset.project)+'/members/'+encodeURIComponent(email),{
         method,headers:{'Content-Type':'application/json'},body:JSON.stringify(method==='PUT'?{role:form.elements.role.value}:{})
       });
-      if(!response.ok){const result=await response.json();throw new Error(result.error||'Erreur lors de la modification.');}
+      if(!response.ok){const result=await response.json();throw new Error(result.error||'Update failed.');}
       window.location.reload();
-    }catch(reason){error.textContent=reason instanceof Error?reason.message:'Modification impossible. Réessayez.';error.hidden=false;}
+    }catch(reason){error.textContent=reason instanceof Error?reason.message:'Update failed. Try again.';error.hidden=false;}
     finally{for(const button of buttons)button.disabled=false;}
   }
   for(const form of projectSettings.querySelectorAll('[data-project-member]')){

@@ -41,7 +41,7 @@ it("Alice uploads, Bob pulls and re-uploads a new session with server-derived pr
   expect(await (await get(bob, `/api/sessions/${origin}`)).json()).toEqual(original);
   expect(await (await get(bob, `/api/sessions/${origin}/bundle`)).text()).toBe(source);
   const html = await (await get(bob, `/s/${fork}`)).text();
-  expect(html).toContain(`forké depuis <a href="/s/${origin}">`);
+  expect(html).toContain(`forked from <a href="/s/${origin}">`);
   expect(html).toContain(ALICE);
   expect((await upload(bob, { id: origin, forked_from: fork })).status).toBe(403);
 });
@@ -78,7 +78,7 @@ it("links a compaction continuation to the owner's parent session, both ways in 
   expect((await upload(alice, { id: next })).status).toBe(200);
   expect((await upload(alice, { id: next, continued_from: crypto.randomUUID() })).status).toBe(400);
   expect(await env.DB.prepare("SELECT continued_from FROM sessions WHERE id = ?").bind(next).first()).toEqual({ continued_from: parent });
-  expect(await (await get(bob, `/s/${next}`)).text()).toContain(`suite de <a href="/s/${parent}">`);
-  expect(await (await get(bob, `/s/${parent}`)).text()).toContain(`suite dans <a href="/s/${next}">`);
-  expect(await (await get(bob, "/")).text()).toContain("suite d’une session compactée");
+  expect(await (await get(bob, `/s/${next}`)).text()).toContain(`continues <a href="/s/${parent}">`);
+  expect(await (await get(bob, `/s/${parent}`)).text()).toContain(`continued in <a href="/s/${next}">`);
+  expect(await (await get(bob, "/")).text()).toContain("continues a compacted session");
 });

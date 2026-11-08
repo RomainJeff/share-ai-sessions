@@ -46,13 +46,13 @@ describe("web reader", () => {
     const { inside, outside } = await workedParts(html);
     expect(html.match(/<details class="worked"[^>]*>/g)).toEqual(['<details class="worked">']);
     expect(inside).toHaveLength(1);
-    expect(inside[0]).toContain("A travaillé pendant 12 min1 outil");
-    for (const text of ["Private reasoning", "Lecture", "Read output", "Injected context", "Progress update", "Trailing context"]) {
+    expect(inside[0]).toContain("Worked for 12 min1 tool");
+    for (const text of ["Private reasoning", "Read", "Read output", "Injected context", "Progress update", "Trailing context"]) {
       expect(inside[0]).toContain(text);
       expect(outside).not.toContain(text);
     }
-    expect(inside[0]!.match(/JSON brut/g)).toHaveLength(6);
-    expect(html).toMatch(/<details class="tool prose"><summary><span class="ticon">.*?<\/span><span class="tverb">Réflexion<\/span><span class="targ">Private reasoning<\/span>/);
+    expect(inside[0]!.match(/Raw JSON/g)).toHaveLength(6);
+    expect(html).toMatch(/<details class="tool prose"><summary><span class="ticon">.*?<\/span><span class="tverb">Thinking<\/span><span class="targ">Private reasoning<\/span>/);
     for (const text of ["Human question", "Final answer"]) {
       expect(inside[0]).not.toContain(text);
       expect(outside).toContain(text);
@@ -72,10 +72,10 @@ describe("web reader", () => {
     ]);
     const { inside, outside } = await workedParts(await (await get(`/s/${id}`)).text());
     expect(inside).toHaveLength(2);
-    expect(inside[0]).toContain("Étapes intermédiaires2 étapes");
+    expect(inside[0]).toContain("Intermediate steps2 steps");
     expect(inside[0]).toContain("Session preamble");
     expect(inside[0]).toContain("Preamble text");
-    expect(inside[1]).toMatch(/A travaillé pendant moins d(?:'|&#39;)une minute1 outil/);
+    expect(inside[1]).toMatch(/Worked for less than a minute1 tool/);
     expect(inside[1]).toContain("Unfinished work");
     expect(inside[1]).toContain("PendingTool");
     expect(outside).not.toContain("Unfinished work");
@@ -89,11 +89,11 @@ describe("web reader", () => {
   });
 
   it.each([
-    [undefined, "2026-10-17T11:05:00Z", "Étapes intermédiaires"],
-    ["2026-10-17T10:00:00Z", undefined, "Étapes intermédiaires"],
-    ["invalid", "2026-10-17T11:05:00Z", "Étapes intermédiaires"],
-    ["2026-10-17T10:00:00Z", "invalid", "Étapes intermédiaires"],
-    ["2026-10-17T10:00:00Z", "2026-10-17T11:05:00Z", "A travaillé pendant 1 h 05"],
+    [undefined, "2026-10-17T11:05:00Z", "Intermediate steps"],
+    ["2026-10-17T10:00:00Z", undefined, "Intermediate steps"],
+    ["invalid", "2026-10-17T11:05:00Z", "Intermediate steps"],
+    ["2026-10-17T10:00:00Z", "invalid", "Intermediate steps"],
+    ["2026-10-17T10:00:00Z", "2026-10-17T11:05:00Z", "Worked for 1 h 05"],
   ])("labels work with timestamps %s → %s", async (start, end, label) => {
     const id = await seed("Timing", [
       { type: "user", timestamp: start, message: { content: "Question" } },
@@ -102,7 +102,7 @@ describe("web reader", () => {
     ]);
     const { inside } = await workedParts(await (await get(`/s/${id}`)).text());
     expect(inside).toHaveLength(1);
-    expect(inside[0]).toContain(`${label}1 étape`);
+    expect(inside[0]).toContain(`${label}1 step`);
   });
 
   it("renders a turn longer than 100 rows in full without pagination", async () => {
@@ -115,7 +115,7 @@ describe("web reader", () => {
       const html = await (await get(`/s/${id}${query}`)).text();
       const { inside, outside } = await workedParts(html);
       expect(inside).toHaveLength(1);
-      expect(inside[0]).toContain("A travaillé pendant 12 min100 étapes");
+      expect(inside[0]).toContain("Worked for 12 min100 steps");
       for (let n = 0; n < 100; n++) expect(inside[0]).toContain(`Progress ${n}`);
       expect(outside).not.toContain("Progress ");
       expect(outside).toContain("Long question");
@@ -147,7 +147,7 @@ describe("web reader", () => {
     const html = await (await get("/")).text();
     const help = html.match(/<details class="panel share-help"[^>]*>([^]*?)<\/details>/)?.[1];
     expect(help).toBeDefined();
-    expect(help).toContain("Partager une session");
+    expect(help).toContain("Share a session");
     expect(help).toContain('class="btn" href="/share-session.skill" download');
     expect(html).toContain('href="/sessions"');
   });
@@ -176,8 +176,8 @@ describe("web reader", () => {
     const html = await (await get("/sessions?q=Order")).text();
     const at = (id: string) => html.indexOf(`/s/${id}`);
     expect(at(fresh)).toBeLessThan(at(stale));
-    expect(at(stale)).toBeLessThan(html.indexOf("Terminées</h2>"));
-    expect(html.indexOf("Terminées</h2>")).toBeLessThan(at(finished));
+    expect(at(stale)).toBeLessThan(html.indexOf("Done</h2>"));
+    expect(html.indexOf("Done</h2>")).toBeLessThan(at(finished));
     expect(html.indexOf("En cours</h2>")).toBeLessThan(at(fresh));
   });
 
@@ -193,12 +193,12 @@ describe("web reader", () => {
     const text = html.match(/<main[^>]*>([^]*?)<\/main>/)![1]!.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
     expect(html).toContain("Alice · alice@example.com");
     expect(text).toContain("acme/repo main claude-test");
-    expect(html).toContain("37 tokens · 101 messages · 98 tours · 1 outil");
-    expect(html).toContain("<dt>Réponses API</dt><dd>1</dd>");
+    expect(html).toContain("37 tokens · 101 messages · 98 turns · 1 tool");
+    expect(html).toContain("<dt>API responses</dt><dd>1</dd>");
     expect(html.match(/<article /g)).toHaveLength(98);
     expect(html.match(/<section class="tturn" id="t\d+"/g)).toHaveLength(98);
-    expect(html).toMatch(/<details class="tool"><summary>[^]*?Lecture[^]*?<\/summary>/);
-    expect(html).toContain('<span class="tverb">Résultat</span><span class="targ">read-id</span>');
+    expect(html).toMatch(/<details class="tool"><summary>[^]*?Read[^]*?<\/summary>/);
+    expect(html).toContain('<span class="tverb">Result</span><span class="targ">read-id</span>');
     expect(html).toContain("Result body");
     expect(html).toContain(`data-copy="/share-session pull ${id}"`);
     expect(html).toContain("Prompt 97");
@@ -216,14 +216,14 @@ describe("web reader", () => {
     const rows = html.match(/<article\b[^]*?<\/article>/g)!;
     expect(rows).toHaveLength(1);
     expect(html.match(/data-role="user"/g)).toHaveLength(1);
-    expect(html.match(/<b>Utilisateur<\/b>/g)).toHaveLength(1);
+    expect(html.match(/<b>User<\/b>/g)).toHaveLength(1);
     expect(rows[0]).toContain('class="turn me" data-role="user"');
     expect(rows[0]).toContain('aria-hidden="true">U</span>');
     expect(rows[0]).toContain("Explain this change");
     const { inside } = await workedParts(html);
     expect(inside[0]).toContain("Read output");
-    expect(html).toContain('<span class="tverb">Résultat</span><span class="targ">read-id</span>');
-    expect(html.match(/<details class="reason context"><summary>[^]*?Contexte/g)).toHaveLength(2);
+    expect(html).toContain('<span class="tverb">Result</span><span class="targ">read-id</span>');
+    expect(html.match(/<details class="reason context"><summary>[^]*?Context/g)).toHaveLength(2);
     expect(html).not.toMatch(/<details class="reason context"[^>]*\bopen\b/);
     for (const record of records) {
       expect(html).toContain(JSON.stringify(record).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;"));
@@ -287,13 +287,13 @@ describe("web reader", () => {
     const { inside, outside } = await workedParts(html);
     // Results render under their call, never as separate rows.
     expect(inside[0]).toContain("boom");
-    expect(html).not.toContain('<span class="tverb">Résultat</span>');
-    expect(html).toMatch(/<details class="tool tgroup">[^]*?Exploré[^]*?1 fichier, 1 recherche/);
-    expect(html).toContain("<span class=\"tmeta\">2 lignes</span>");
+    expect(html).not.toContain('<span class="tverb">Result</span>');
+    expect(html).toMatch(/<details class="tool tgroup">[^]*?Explored[^]*?1 file, 1 search/);
+    expect(html).toContain("<span class=\"tmeta\">2 lines</span>");
     expect(html).toMatch(/<details class="tool err" open>[^]*?npm test[^]*?exit 1/);
     expect(html).toContain('<span class="add">+2</span> <span class="del">−1</span>');
     expect(html).toContain('<span class="dd">-const a = 1;</span>');
-    expect(html).toContain('<span class="pill">4 outils</span><span class="pill">1 modif</span><span class="pill bad">1 erreur</span>');
+    expect(html).toContain('<span class="pill">4 tools</span><span class="pill">1 edit</span><span class="pill bad">1 error</span>');
     // Markdown: safe links only, raw HTML escaped, images as text, highlighted code.
     expect(outside).toContain("<strong>question</strong>");
     expect(outside).not.toMatch(/href="javascript:/i);
@@ -301,13 +301,13 @@ describe("web reader", () => {
     expect(outside).toContain('href="https://example.com" rel="noopener noreferrer nofollow"');
     expect(outside).toContain("&lt;b&gt;raw&lt;/b&gt;");
     expect(outside).not.toContain("<img");
-    expect(outside).toContain('<span class="md-img">Image : x</span>');
+    expect(outside).toContain('<span class="md-img">Image: x</span>');
     expect(outside).toContain('<span class="hljs-keyword">const</span>');
     expect(outside).toContain("data-copy-code");
     // Turns are anchored; the reader opens on the last one.
-    expect(html).toContain('<section class="tturn" id="t1" aria-label="Tour 1">');
-    expect(html).toContain('<section class="tturn" id="t2" aria-label="Tour 2">');
-    expect(html).toContain('<nav class="turnrail" aria-label="Tours de la conversation" tabindex="0" data-rail>');
+    expect(html).toContain('<section class="tturn" id="t1" aria-label="Turn 1">');
+    expect(html).toContain('<section class="tturn" id="t2" aria-label="Turn 2">');
+    expect(html).toContain('<nav class="turnrail" aria-label="Conversation turns" tabindex="0" data-rail>');
     expect(html).toMatch(/<a href="#t2" data-turn-link><span class="n">2<\/span><span class="tt">[^<]+<\/span><\/a>/);
     expect(html).not.toContain("data-turn-label");
     expect(html).toContain("data-levels hidden");
@@ -376,7 +376,7 @@ describe("web reader", () => {
     const html = await (await get(`/s/${id}`)).text();
     expect(html).toContain("Second segment");
     expect(html.indexOf("First segment")).toBeLessThan(html.indexOf("Second segment"));
-    expect(html).toContain("1 ligne(s) JSONL invalide(s)");
+    expect(html).toContain("1 invalid JSONL line(s)");
   });
 
   it("serves the packaged skill behind Access and links it from the list", async () => {
@@ -414,8 +414,8 @@ describe("projects reader", () => {
     const response = await get("/projects");
     expect(response.status).toBe(200);
     const html = await response.text();
-    expect(html).toContain("Projets");
-    expect(html).toContain("Écriture");
+    expect(html).toContain("Projects");
+    expect(html).toContain("Writer");
     expect(html.replace(/<[^>]*>/g, "")).toContain("1 session");
     expect(html).toContain(`href="/projects/${own}"`);
     expect(html).not.toContain("Hidden project");
@@ -442,7 +442,7 @@ describe("projects reader", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-security-policy")).toContain("connect-src 'self'");
     const html = await response.text();
-    for (const text of [ALICE, BOB, "Ajouté par", "Ajouté le", "Ajouter un membre", "Enregistrer", "Retirer"]) expect(html).toContain(text);
+    for (const text of [ALICE, BOB, "Added by", "Added on", "Add member", "Save", "Remove"]) expect(html).toContain(text);
     for (const role of ["owner", "writer", "reader"]) expect(html).toContain(`value="${role}"`);
     expect(html).toContain('type="email"');
     expect(html).toContain('role="alert"');
@@ -482,6 +482,6 @@ it("reads Codex response items without duplicating event messages", async () => 
   expect(inside[0]).toContain("exec_command");
   expect(inside[0]).toContain("Codex output");
   expect(html.match(/data-role="user"/g)).toHaveLength(1);
-  expect(html).toContain("Claude Code ou Codex");
+  expect(html).toContain("Claude Code or Codex");
   expect(html).toContain("150 tokens");
 });

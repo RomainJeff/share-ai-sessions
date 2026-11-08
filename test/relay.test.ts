@@ -103,10 +103,10 @@ describe("relayed sessions", () => {
     const html = await (await SELF.fetch(`${ORIGIN}/s/${id}`, { headers: await auth(BOB) })).text();
     expect(html).toContain('id="conversation"');
     expect(html).toContain("Hello from T3");
-    expect(html).toContain("Ouvrir dans T3 Code");
-    expect(html).toMatch(/<button class="btn" type="button" data-copy="\/share-session pull [^"]+">.*Reprendre<\/button>/);
-    expect(html).toContain("Commande de reprise");
-    expect(html).toContain("Hébergée par");
+    expect(html).toContain("Open in T3 Code");
+    expect(html).toMatch(/<button class="btn" type="button" data-copy="\/share-session pull [^"]+">.*Resume<\/button>/);
+    expect(html).toContain("Resume command");
+    expect(html).toContain("Hosted by");
   });
 
   it("opens the app from the reader and lists a badge, without transcript or resume", async () => {
@@ -116,19 +116,19 @@ describe("relayed sessions", () => {
     await SELF.fetch(`${ORIGIN}/api/projects`, { method: "POST", headers: await auth(), body: JSON.stringify({ slug: "relay-destination" }) });
     const html = await page(`/s/${id}`);
     expect(html).toContain(`<a class="btn primary" href="https://t3.example.com/guest#a&quot;&gt;&lt;b&gt;x&lt;/b&gt;" target="_blank" rel="noopener noreferrer">`);
-    expect(html).toContain("Ouvrir dans T3 Code");
-    for (const text of ["Reprendre", "Commande de reprise", 'id="conversation"', "Lien expiré", "<b>x</b>"]) expect(html).not.toContain(text);
-    expect(html).toContain("Changer de projet");
+    expect(html).toContain("Open in T3 Code");
+    for (const text of ["Resume", "Resume command", 'id="conversation"', "Link expired", "<b>x</b>"]) expect(html).not.toContain(text);
+    expect(html).toContain("Change project");
 
     await relay(id, { app: "t3code", url, expires_at: Date.now() - 1000 });
     const expired = await page(`/s/${id}`);
-    expect(expired).toContain("Lien expiré");
-    expect(expired).not.toContain("Ouvrir dans");
+    expect(expired).toContain("Link expired");
+    expect(expired).not.toContain("Open in");
     expect(expired).not.toContain("t3.example.com");
 
     const other = crypto.randomUUID();
     await relay(other, { app: "other-app", url: LINK, project: "team" });
-    expect(await page(`/s/${other}`)).toContain("Ouvrir dans other-app");
+    expect(await page(`/s/${other}`)).toContain("Open in other-app");
     expect(await page("/sessions")).toMatch(/Relayed reader<\/a>\s*<p class="session-note"><span class="badge">T3 Code<\/span>/);
   });
 

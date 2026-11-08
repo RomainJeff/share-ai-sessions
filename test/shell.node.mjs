@@ -11,12 +11,12 @@ test('navigation renders canonical destinations, active location, help and escap
     email: hostile,
     projects: [{ slug: 'my project', name: hostile, role: 'reader', members: 1, sessions: 2,
       last_synced_at: 1, last_session_id: 'first', last_session_title: 'First' }],
-    breadcrumbs: [{ label: 'Accueil', href: '/' }, { label: hostile }],
+    breadcrumbs: [{ label: 'Home', href: '/' }, { label: hostile }],
     backHref: '/projects/my%20project?q=title&mine=1',
-    backLabel: 'Retour au projet',
+    backLabel: 'Back to project',
   });
   const html = await response.text();
-  const primary = html.match(/<nav[^>]+aria-label="Navigation principale"[^>]*>([^]*?)<\/nav>/)[1];
+  const primary = html.match(/<nav[^>]+aria-label="Main navigation"[^>]*>([^]*?)<\/nav>/)[1];
   assert.match(primary, /<a href="\/projects" aria-current="page">/);
   assert.match(primary, /href="\/sessions"/);
   assert.match(html, /<form[^>]+method="get" action="\/sessions" role="search">/);

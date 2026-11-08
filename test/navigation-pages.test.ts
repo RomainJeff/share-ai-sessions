@@ -79,27 +79,27 @@ describe("navigation pages", () => {
     const readerResponse = await get(`/projects/${reader}`);
     expect(await attributes(readerResponse.clone(), ".project-members", "open")).toEqual([]);
     const readerHtml = await (await get(`/projects/${reader}`)).text();
-    expect(readerHtml).toContain("Ce projet attend sa première session");
-    expect(readerHtml).toContain("Membres (2)");
+    expect(readerHtml).toContain("This project has no sessions yet");
+    expect(readerHtml).toContain("Members (2)");
     const memberText: string[] = [];
     await new HTMLRewriter().on(".members-panel li", { text(chunk) { memberText.push(chunk.text); } }).transform(readerResponse).text();
     const allMembers = memberText.join("");
     expect(allMembers).toContain(viewer);
     expect(allMembers).toContain(ownerEmail);
-    expect(allMembers).toContain("Propriétaire");
-    expect(allMembers).toContain("Lecture seule");
+    expect(allMembers).toContain("Owner");
+    expect(allMembers).toContain("Read-only");
     expect(readerHtml).not.toContain(`/projects/${reader}/settings`);
     expect(await attributes(new Response(readerHtml), "form[data-project-member]", "data-project-member")).toEqual([]);
     expect((await get(`/projects/${reader}`, BOB)).status).toBe(404);
-    expect(readerHtml).toContain("Demandez à un membre disposant du droit d’écriture");
-    expect(readerHtml).not.toContain("Partager une première session");
+    expect(readerHtml).toContain("Ask a member with write access");
+    expect(readerHtml).not.toContain("Share a first session");
     const ownerHtml = await (await get(`/projects/${owner}`)).text();
-    expect(ownerHtml).toContain('href="#share-help">Partager une première session');
+    expect(ownerHtml).toContain('href="#share-help">Share a first session');
     expect(ownerHtml).toContain(`href="/projects/${owner}/settings"`);
     await session(owner, "An existing conversation", Date.now());
     const missing = await (await get(`/projects/${owner}?q=unmatched`)).text();
-    expect(missing).toContain("Aucune session ne correspond");
-    expect(missing).toContain(`href="/projects/${owner}">Effacer la recherche`);
+    expect(missing).toContain("No matching sessions");
+    expect(missing).toContain(`href="/projects/${owner}">Clear search`);
   });
 
   it("paginates project sessions by 100 without dropping the search", async () => {
