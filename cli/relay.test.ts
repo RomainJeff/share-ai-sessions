@@ -88,7 +88,7 @@ test("relay sends redacted metadata and the link, never the transcript, and rene
   } finally { await f.cleanup(); }
 });
 
-test("sync, hook-stop and upload skip or refuse a relayed id; stop forgets it; list and pull show the link", async () => {
+test("sync and hook-stop skip a relay without transcript; stop forgets it; list and pull show the link", async () => {
   const f = await fixture();
   try {
     await main(["relay", f.id, "--app", "t3code", "--url", LINK, "--project", "team"]);
@@ -100,7 +100,6 @@ test("sync, hook-stop and upload skip or refuse a relayed id; stop forgets it; l
     });
     const out = mock.method(process.stdout, "write", () => true);
     try { await main(["hook-stop"]); } finally { input.mock.restore(); out.mock.restore(); }
-    await assert.rejects(main(["upload", f.transcript, "--project", "team"]), { code: "relayed" });
     assert.equal(f.calls.length, before);
 
     f.reply((method, path) => path.endsWith("/bundle")
@@ -113,5 +112,42 @@ test("sync, hook-stop and upload skip or refuse a relayed id; stop forgets it; l
     const manifest = await f.manifest();
     assert.equal(manifest.relays[f.id], undefined);
     assert.ok(manifest.stopped[f.id]);
+  } finally { await f.cleanup(); }
+});
+
+test("upload --as hosts a transcript under the relay id, then sync keeps that id", async () => {
+  const f = await fixture();
+  try {
+    const relayId = randomUUID();
+    await main(["relay", relayId, "--app", "t3code", "--url", LINK, "--project", "team", "--transcript", f.transcript]);
+    await assert.rejects(main(["upload", f.transcript, "--as", "not-a-uuid"]), { code: "usage" });
+    // The relay picked the project: no --project needed.
+    const preview = await main(["upload", f.transcript, "--as", relayId]) as { status: string; preview: { project: string }; confirmation: string };
+    assert.equal(preview.status, "confirmation_required");
+    assert.equal(preview.preview.project, "team");
+
+    let meta: Record<string, unknown> = {};
+    let hosted = 0;
+    mock.method(globalThis, "fetch", async (url: string, init: RequestInit = {}) => {
+      const method = init.method ?? "GET";
+      if (method === "POST") {
+        const form = init.body as FormData;
+        meta = JSON.parse(form.get("meta") as string);
+        hosted = (await (form.get("jsonl") as Blob).arrayBuffer()).byteLength;
+        return Response.json({ id: meta.id, project: "team" }, { status: 200 });
+      }
+      // A server copy that does not match forces sync's full re-upload, which must keep the relay id.
+      return Response.json({ id: relayId, bytes: hosted + 1, last_line_hash: null });
+    });
+    await main(["upload", f.transcript, "--as", relayId, "--confirm", preview.confirmation]);
+    assert.equal(meta.id, relayId);
+    const manifest = await f.manifest();
+    assert.equal(manifest.sessions[relayId].path, f.transcript);
+    assert.equal(manifest.sessions[f.id], undefined);
+    assert.ok(manifest.relays[relayId]);
+
+    meta = {};
+    await main(["sync", relayId]);
+    assert.equal(meta.id, relayId);
   } finally { await f.cleanup(); }
 });

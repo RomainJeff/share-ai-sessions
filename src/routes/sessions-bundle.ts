@@ -6,7 +6,7 @@ export async function sessionBundle(request: Request, env: Env, who: Identity, {
   const session = await env.DB.prepare(`SELECT * FROM sessions WHERE id = ? AND ${VISIBLE} AND ${MEMBER}`)
     .bind(id, visibleSince(), who.email).first<{ segment_count: number; external_app: string | null; external_url: string | null } & Record<string, unknown>>();
   if (!session) return Response.json({ error: "not found" }, { status: 404 });
-  if (session.external_app) {
+  if (!session.segment_count) {
     return Response.json({ error: `session is relayed from ${session.external_app}: no transcript is stored here, open ${session.external_url}` }, { status: 409 });
   }
   let n = 1;

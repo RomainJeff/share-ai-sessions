@@ -34,13 +34,13 @@ export async function createSession(request: Request, env: Env, who: Identity): 
   }
 
   // Ownership ignores retention: an expired session still belongs to its owner.
-  const existing = await env.DB.prepare("SELECT owner_email, project, created_at, forked_from, continued_from, external_app FROM sessions WHERE id = ?")
+  const existing = await env.DB.prepare("SELECT owner_email, project, created_at, forked_from, continued_from, external_app, external_url, external_expires_at FROM sessions WHERE id = ?")
     .bind(id)
-    .first<{ owner_email: string; project: string; created_at: number; forked_from: string | null; continued_from: string | null; external_app: string | null }>();
+    .first<{ owner_email: string; project: string; created_at: number; forked_from: string | null; continued_from: string | null;
+      external_app: string | null; external_url: string | null; external_expires_at: number | null }>();
   if (existing && existing.owner_email !== who.email) {
     return Response.json({ error: "forbidden" }, { status: 403 });
   }
-  if (existing?.external_app) return Response.json({ error: `session is relayed from ${existing.external_app}` }, { status: 409 });
   let forkedFrom = existing?.forked_from ?? null;
   if (meta.forked_from !== undefined && meta.forked_from !== null) {
     if (typeof meta.forked_from !== "string" || !UUID.test(meta.forked_from) || meta.forked_from === id) {
@@ -106,12 +106,15 @@ export async function createSession(request: Request, env: Env, who: Identity): 
   await env.DB.prepare(
     `INSERT OR REPLACE INTO sessions
        (id, owner_email, owner_name, project, repo, branch, title, cwd_base, model, cc_version,
-        msg_count, bytes, created_at, updated_at, last_synced_at, last_line_hash, forked_from, forked_from_owner, continued_from)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        msg_count, bytes, created_at, updated_at, last_synced_at, last_line_hash, forked_from, forked_from_owner, continued_from,
+        external_app, external_url, external_expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id, who.email, who.name, project, repo, str(meta.branch), str(meta.title), str(meta.cwd_base, 1000),
       str(meta.model), str(meta.cc_version), msgCount, file.size, existing?.created_at ?? now, now, now, hash, forkedFrom, forkedFromOwner, continuedFrom,
+      // A relayed session keeps its link to the hosting app.
+      existing?.external_app ?? null, existing?.external_url ?? null, existing?.external_expires_at ?? null,
     )
     .run();
 

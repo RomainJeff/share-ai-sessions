@@ -79,7 +79,7 @@ Every session lives in exactly one **project**, chosen by the user, independent 
 | Command | Does |
 |---------|------|
 | `doctor` | Checks Node 24+, config, `cloudflared` token, API reachability, `claude --version`, `~/.claude/projects`, Codex version and sessions directory |
-| `upload <path.jsonl> [--project <slug>] [--strip-thinking] [--strip-tool-results] [--confirm <hash>]` | Previews, then uploads after consent. `--project` is required for a session's first upload (`project_required` otherwise) and omitted for re-uploads, forks and continuations, which inherit it. Strip flags remove thinking or inline tool-result payloads for a read-only share; keep the same flags when confirming. `repo` = `owner/repo` from the session cwd's `git remote get-url origin` (cwd basename otherwise) |
+| `upload <path.jsonl> [--project <slug>] [--as <id>] [--strip-thinking] [--strip-tool-results] [--confirm <hash>]` | Previews, then uploads after consent. `--project` is required for a session's first upload (`project_required` otherwise) and omitted for re-uploads, forks and continuations, which inherit it. `--as <id>` uploads under another session id, e.g. the id of a relay (see "Relayed sessions"). Strip flags remove thinking or inline tool-result payloads for a read-only share; keep the same flags when confirming. `repo` = `owner/repo` from the session cwd's `git remote get-url origin` (cwd basename otherwise) |
 | `sync <id>` / `sync --all` | Send complete new lines, redacted with the upload's strip policy, for one opted-in session or every manifest entry. Server bytes/hash of the sanitized stream decide the offset; conflict or rewritten prefix triggers a full replacement |
 | `stop <id>` / `stop current` | Remove the local manifest entry and record a stop tombstone, without deleting the remote session. Durable: hook and manual sync stay off until a new consented upload. Returns a `share-session:opt-out <id>` marker; keep it in the conversation. `current` uses `CLAUDE_SESSION_ID` or `CODEX_THREAD_ID`; otherwise pass the id |
 | `relay <id> --app <slug> --url <https url> [--expires <ISO>] [--project <slug>] [--transcript <path.jsonl>] [--title <text>]` | List a session hosted by another app as a link, without its transcript (see "Relayed sessions") |
@@ -105,7 +105,8 @@ When a session already lives in another app that gives a shareable link (first c
 - `relay <id> --app t3code --url <link> --expires <ISO> --project <slug> --transcript <path.jsonl>`: `--project` follows the upload rules (required the first time, locked afterwards). `--transcript` only fills the metadata (title, repo, branch, model, version, message count, cwd), redacted like an upload's; no transcript line is ever sent. `--title` overrides the title, e.g. with the hosting app's own name for the session.
 - Result: `{ id, owner_email, project, external_app, external_url, external_expires_at, url }`, `url` being the Session Share page. The session shows in lists and project pages with the app's badge; its page opens the link, or shows it as expired.
 - Renew before expiry with the same command and the new link; `--project` and `--transcript` can be omitted. Each relay counts as activity for the 90-day window.
-- `sync`, `sync --all` and the Stop hook skip relayed sessions; `upload` and `pull` refuse them with `relayed` (pull gives the link). `stop <id>` forgets the local entry like for an upload.
+- A relay can also host its transcript, so every project member reads the conversation while the link gives interaction to one person: `upload <path.jsonl> --as <relay id>` (preview, then `--confirm`, like any upload; the relay's project applies), then `sync <relay id>`. Each needs its own consent, like any upload. The page then shows the conversation, « Ouvrir dans … » and « Reprendre ».
+- Without an uploaded transcript, `sync`, `sync --all` and the Stop hook skip a relay, and `pull` refuses it with `relayed` (with the link). `stop <id>` forgets the local entries like for an upload.
 
 ## Stop hook check
 
@@ -135,8 +136,8 @@ The **Reprendre** button copies `/share-session pull <id>` for use in Claude Cod
 - `forbidden` on `project add/remove`: only owners manage members.
 - `not_found` on a session or project: it does not exist, or the user is not a member of its project.
 - `bad_request: project is locked to …`: drop `--project`, the session inherits its project.
-- `conflict`: the project slug is taken, the change would leave the project without an owner, or `relay` targets a session already shared with its transcript.
-- `relayed`: the session is hosted by another app; renew it with `relay`, open its link to read it.
+- `conflict`: the project slug is taken, the change would leave the project without an owner, or a delta targets a relay whose transcript was never uploaded (upload it first).
+- `relayed`: the session is hosted by another app without a transcript here; renew it with `relay`, open its link to read it.
 - `confirmation_mismatch`: request a new preview and user agreement for the current content and options.
 - `invalid_jsonl`: an incomplete or malformed line was refused without sending it; retry once the transcript finishes writing.
 

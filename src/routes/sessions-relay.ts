@@ -16,8 +16,9 @@ function httpsUrl(value: unknown): string | null {
 }
 
 /**
- * PUT /api/sessions/:id/relay — a session hosted by another app: metadata and a link, never a transcript.
+ * PUT /api/sessions/:id/relay — a session hosted by another app: metadata and a link to open it there.
  * Create or renew, with createSession's ownership and project rules. Every call counts as activity.
+ * A transcript uploaded under the same id (before or after) stays: readers read it here, the link opens the app.
  */
 export async function relaySession(request: Request, env: Env, who: Identity, { id }: Record<string, string>): Promise<Response> {
   if (!UUID.test(id!)) return fail("id must be a lowercase UUID", 400);
@@ -39,10 +40,9 @@ export async function relaySession(request: Request, env: Env, who: Identity, { 
   }
 
   // Ownership ignores retention, like uploads.
-  const existing = await env.DB.prepare("SELECT owner_email, project, external_app FROM sessions WHERE id = ?")
-    .bind(id).first<{ owner_email: string; project: string; external_app: string | null }>();
+  const existing = await env.DB.prepare("SELECT owner_email, project FROM sessions WHERE id = ?")
+    .bind(id).first<{ owner_email: string; project: string }>();
   if (existing && existing.owner_email !== who.email) return fail("forbidden", 403);
-  if (existing && existing.external_app === null) return fail("session already holds a hosted transcript", 409);
   const requested = str(input.project, 200)?.toLowerCase();
   if (existing && requested && requested !== existing.project) {
     return fail(`project is locked to ${existing.project}, the project of this session`, 400);
@@ -59,7 +59,7 @@ export async function relaySession(request: Request, env: Env, who: Identity, { 
     const updated = await env.DB.prepare(`UPDATE sessions SET owner_name = ?, repo = COALESCE(?, repo), branch = COALESCE(?, branch),
       title = COALESCE(?, title), cwd_base = COALESCE(?, cwd_base), model = COALESCE(?, model), cc_version = COALESCE(?, cc_version),
       msg_count = COALESCE(?, msg_count), external_app = ?, external_url = ?, external_expires_at = ?, updated_at = ?, last_synced_at = ?
-      WHERE id = ? AND owner_email = ? AND external_app IS NOT NULL`)
+      WHERE id = ? AND owner_email = ?`)
       .bind(who.name, ...meta, app, url, expiresAt, now, now, id, who.email).run();
     if (!updated.meta.changes) return fail("session changed; retry", 409);
   } else {
