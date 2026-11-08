@@ -4,11 +4,11 @@ import { getProjectSummaries } from "../navigation";
 import { activityNote, projectCard, sessionRow, type NavigationSession } from "../navigation-render";
 import { page } from "../ui";
 
-/** GET / — the most recently synchronized accessible conversations and projects. */
+/** GET / — in-progress, then finished, most recently synchronized accessible conversations, and projects. */
 export async function homePage(_request: Request, env: Env, who: Identity): Promise<Response> {
   const projects = await getProjectSummaries(env, who.email);
   const { results } = await env.DB.prepare(`SELECT id,title,summary,project,repo,owner_email,owner_name,msg_count,last_synced_at,continued_from,forked_from,forked_from_owner,external_app,done_at
-    FROM sessions WHERE ${VISIBLE} AND ${MEMBER} ORDER BY last_synced_at DESC,id LIMIT 5`)
+    FROM sessions WHERE ${VISIBLE} AND ${MEMBER} ORDER BY done_at IS NOT NULL,last_synced_at DESC,id LIMIT 5`)
     .bind(visibleSince(), who.email).all<NavigationSession>();
   const active = projects.filter((p) => p.last_synced_at !== null && p.last_synced_at > Date.now() - 7 * 86400000);
   const cards = (active.length ? active : projects).slice(0, 4);

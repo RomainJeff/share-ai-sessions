@@ -49,28 +49,24 @@ describe("navigation pages", () => {
     expect(projects).not.toContain(`/projects/${hiddenProject}`);
   });
 
-  it("keeps all live project authors available under search, and preserves filters in mine and session links", async () => {
+  it("searches a project and keeps the search in session links, with no other list filters", async () => {
     const p = await project("owner", 'A <script>project</script>');
     const id = await session(p, "Needle Alice", Date.now());
     await session(p, "Different Bob", Date.now() - 1000, BOB);
-    const path = `/projects/${p}?q=Needle&repo=nav%2Frepo&sort=oldest&author=${encodeURIComponent(viewer)}`;
+    const path = `/projects/${p}?q=Needle`;
     const response = await get(path);
     expect(response.status).toBe(200);
     const html = await response.clone().text();
     expect(html).toContain('A &lt;script&gt;project&lt;/script&gt;');
     expect(html).not.toContain("<script>project</script>");
-    const authors = await attributes(response.clone(), 'select[name="author"] option', "value");
-    expect(authors).toContain(BOB);
-    const links = await attributes(response.clone(), ".session-title");
+    for (const name of ["author", "status", "sort", "repo", "from"]) expect(html).not.toContain(`name="${name}"`);
+    expect(html).not.toContain('class="segmented"');
+    const links = await attributes(response, ".session-title");
     expect(links).toHaveLength(1);
     expect(new URL(links[0]!, ORIGIN).pathname).toBe(`/s/${id}`);
     expect(new URL(links[0]!, ORIGIN).searchParams.get("return")).toBe(path);
-    const mine = (await attributes(response, ".segmented a")).map((href) => new URL(href, ORIGIN)).find((url) => url.searchParams.get("mine") === "1")!;
-    expect(mine.searchParams.get("q")).toBe("Needle");
-    expect(mine.searchParams.get("repo")).toBe("nav/repo");
-    expect(mine.searchParams.has("author")).toBe(false);
-    expect(await attributes(await get(mine.pathname + mine.search), 'select[name="author"]', "disabled")).toEqual([""]);
-    expect(await attributes(await get(mine.pathname + mine.search), ".session-title")).toHaveLength(1);
+    // Former filter parameters are ignored rather than silently narrowing the list.
+    expect(await attributes(await get(`/projects/${p}?author=${encodeURIComponent(BOB)}&repo=other%2Frepo`), ".session-title")).toHaveLength(2);
     expect((await get(`/projects/${p}`, BOB)).status).toBe(404);
     expect((await get(`/projects/${p}/settings`, BOB)).status).toBe(404);
   });
@@ -103,16 +99,16 @@ describe("navigation pages", () => {
     await session(owner, "An existing conversation", Date.now());
     const missing = await (await get(`/projects/${owner}?q=unmatched`)).text();
     expect(missing).toContain("Aucune session ne correspond");
-    expect(missing).toContain(`href="/projects/${owner}">Effacer les filtres`);
+    expect(missing).toContain(`href="/projects/${owner}">Effacer la recherche`);
   });
 
-  it("paginates project sessions by 100 without dropping the author, search, or date filters", async () => {
+  it("paginates project sessions by 100 without dropping the search", async () => {
     const p = await project();
     const now = Date.now();
     await env.DB.batch(Array.from({ length: 101 }, (_, n) => env.DB.prepare(`INSERT INTO sessions
       (id,owner_email,owner_name,project,repo,title,created_at,updated_at,last_synced_at)
       VALUES (?,?,'Alice',?,'nav/repo','Paging needle',?,?,?)`).bind(crypto.randomUUID(), viewer, p, now, now, now + n)));
-    const query = `q=needle&author=${encodeURIComponent(viewer)}&from=2020-01-01`;
+    const query = "q=needle";
     const first = await get(`/projects/${p}?${query}`);
     const firstLinks = await attributes(first.clone(), ".session-title");
     expect(firstLinks).toHaveLength(100);
@@ -120,12 +116,9 @@ describe("navigation pages", () => {
     const nextUrl = new URL(next, ORIGIN);
     expect(nextUrl.pathname).toBe(`/projects/${p}`);
     expect(nextUrl.searchParams.get("q")).toBe("needle");
-    expect(nextUrl.searchParams.get("author")).toBe(viewer);
-    expect(nextUrl.searchParams.get("from")).toBe("2020-01-01");
     expect(nextUrl.searchParams.get("page")).toBe("2");
     const secondLinks = await attributes(await get(nextUrl.pathname + nextUrl.search), ".session-title");
     expect(secondLinks).toHaveLength(1);
     expect(firstLinks.map((link) => new URL(link, ORIGIN).pathname)).not.toContain(new URL(secondLinks[0]!, ORIGIN).pathname);
-    expect((await get(`/projects/${p}?from=2026-02-31`)).status).toBe(400);
   });
 });

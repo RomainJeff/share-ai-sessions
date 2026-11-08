@@ -33,19 +33,10 @@ export function projectCard(p: ProjectSummary): string {
     ${p.last_session_id ? `<div class="last-session">${icon("chat")}<span>${e(p.last_session_title || p.last_session_id)}</span></div>` : ""}</article>`;
 }
 
+/** Rows arrive in-progress first, then finished: one titled list per status. */
 export function groupedSessions(rows: NavigationSession[], projects: ProjectSummary[], email: string, returnTo: string, inProject: boolean): string {
-  const today = Math.floor(Date.now() / 86400000);
-  let group = "";
-  let html = "";
-  for (const s of rows) {
-    const day = Math.floor(s.last_synced_at / 86400000);
-    const label = day >= today ? "Aujourd’hui (UTC)" : day === today - 1 ? "Hier (UTC)" : "Plus tôt";
-    if (label !== group) {
-      if (group) html += "</div>";
-      html += `<h2 class="group-title">${label}</h2><div class="session-list">`;
-      group = label;
-    }
-    html += sessionRow(s, projects, email, returnTo, inProject);
-  }
-  return html + (group ? "</div>" : "");
+  return [false, true].map((done) => {
+    const group = rows.filter((s) => Boolean(s.done_at) === done);
+    return group.length ? `<h2 class="group-title">${statusIcon(done, false)}${done ? "Terminées" : "En cours"}</h2><div class="session-list">${group.map((s) => sessionRow(s, projects, email, returnTo, inProject)).join("")}</div>` : "";
+  }).join("");
 }

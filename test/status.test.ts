@@ -82,10 +82,11 @@ describe("session status", () => {
     expect(reader).toContain('<header class="dhead is-done">');
     expect(reader).toMatch(/class="status-pill is-done"[^>]*data-status="active" disabled>.*Terminée .*Rouvrir<\/span><\/button>/);
     expect(await html(CAROL, `/s/${id}`)).toMatch(/<span class="status-pill is-done">.*Terminée /);
-    const list = await html(ALICE, `/projects/${project}?status=done`);
+    const list = await html(ALICE, `/projects/${project}`);
     expect(list).toContain('<article class="session-row is-done"><div class="session-main"><svg class="st is-done"');
     expect(list).toContain('aria-label="Terminée"');
     expect(list).not.toContain('<span class="badge">Terminée</span>');
-    expect(await html(ALICE, `/projects/${project}?status=active`)).not.toContain("Finished work");
+    expect(list).toContain("Terminées</h2>");
+    expect(list).not.toContain("En cours</h2>");
   });
 });

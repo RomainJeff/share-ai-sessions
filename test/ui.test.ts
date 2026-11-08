@@ -151,24 +151,33 @@ describe("web reader", () => {
     expect(html).toContain('href="/sessions"');
   });
 
-  it("filters title/summary, project, author and inclusive UTC period, newest first", async () => {
+  it("searches title and summary, newest first", async () => {
     const older = await seed("Older hit");
     const newer = await seed("Newer hit");
-    const other = await seed("Other hit", [], "else/repo");
-    const today = new Date().toISOString().slice(0, 10);
-    const firstDay = new Date(Date.parse(today) - 2 * 86400000).toISOString().slice(0, 10);
-    const secondDay = new Date(Date.parse(today) - 86400000).toISOString().slice(0, 10);
-    await env.DB.prepare("UPDATE sessions SET last_synced_at = ?, summary = ? WHERE id = ?").bind(Date.parse(`${firstDay}T23:59:59Z`), "needle", older).run();
-    await env.DB.prepare("UPDATE sessions SET last_synced_at = ?, summary = ? WHERE id = ?").bind(Date.parse(`${secondDay}T12:00:00Z`), "needle", newer).run();
-    const html = await (await get(`/sessions?repo=acme/repo&author=${ALICE}&q=needle&from=${firstDay}&to=${secondDay}`)).text();
+    const other = await seed("Other title", [], "else/repo");
+    await env.DB.prepare("UPDATE sessions SET last_synced_at = ?, summary = ? WHERE id = ?").bind(Date.now() - 2000, "needle", older).run();
+    await env.DB.prepare("UPDATE sessions SET last_synced_at = ?, summary = ? WHERE id = ?").bind(Date.now() - 1000, "needle", newer).run();
+    const html = await (await get("/sessions?q=needle")).text();
     expect(html).toContain(`/s/${older}`);
     expect(html.indexOf("Newer hit")).toBeLessThan(html.indexOf("Older hit"));
     expect(html).not.toContain(`/s/${other}`);
-    expect(await (await get(`/sessions?from=${firstDay}&to=${firstDay}&q=Older`)).text()).toContain(`/s/${older}`);
-    expect(await (await get(`/sessions?q=Newer&to=${firstDay}`)).text()).not.toContain(`/s/${newer}`);
-    expect(await (await get("/sessions?author=other@example.com")).text()).not.toContain(`/s/${newer}`);
     expect(await (await get("/sessions?q=Older")).text()).toContain(`/s/${older}`);
-    expect((await get("/sessions?from=2026-02-31")).status).toBe(400);
+  });
+
+  it("lists in-progress sessions before finished ones, each group newest first", async () => {
+    const finished = await seed("Order finished");
+    const stale = await seed("Order stale");
+    const fresh = await seed("Order fresh");
+    const now = Date.now();
+    await env.DB.prepare("UPDATE sessions SET last_synced_at = ?, done_at = ? WHERE id = ?").bind(now, now, finished).run();
+    await env.DB.prepare("UPDATE sessions SET last_synced_at = ? WHERE id = ?").bind(now - 2000, stale).run();
+    await env.DB.prepare("UPDATE sessions SET last_synced_at = ? WHERE id = ?").bind(now - 1000, fresh).run();
+    const html = await (await get("/sessions?q=Order")).text();
+    const at = (id: string) => html.indexOf(`/s/${id}`);
+    expect(at(fresh)).toBeLessThan(at(stale));
+    expect(at(stale)).toBeLessThan(html.indexOf("Terminées</h2>"));
+    expect(html.indexOf("Terminées</h2>")).toBeLessThan(at(finished));
+    expect(html.indexOf("En cours</h2>")).toBeLessThan(at(fresh));
   });
 
   it("shows metadata, deduplicated tokens, collapsed tools and every conversation row", async () => {
@@ -284,13 +293,13 @@ describe("web reader", () => {
     }
   });
 
-  it("keeps active filters while paging the list by 100, and escapes search values", async () => {
+  it("keeps the search while paging the list by 100, and escapes search values", async () => {
     const id = await seed("Pagination", [], "paging/repo");
     await env.DB.batch(Array.from({ length: 100 }, (_, n) => env.DB.prepare(`INSERT INTO sessions
       (id, owner_email, owner_name, project, repo, title, created_at, updated_at, last_synced_at)
       VALUES (?, ?, 'Alice', 'team', 'paging/repo', ?, ?, ?, ?)`).bind(
       crypto.randomUUID(), ALICE, `Pagination ${n}`, Date.now(), Date.now() + n + 1, Date.now() + n + 1)));
-    const query = `repo=paging%2Frepo&author=${encodeURIComponent(ALICE)}&q=Pagination`;
+    const query = "q=Pagination";
     const first = await (await get(`/sessions?${query}`)).text();
     expect(first.match(/<article class="session-row"/g)).toHaveLength(100);
     expect(first).toContain(`href="/sessions?${query.replaceAll("&", "&amp;")}&amp;page=2"`);

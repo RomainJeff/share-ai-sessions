@@ -432,9 +432,6 @@ body.has-navigation{
 .has-navigation .searchbox input:focus-visible{outline:0}
 .has-navigation .toolbar select{border:1px solid var(--nav-line);border-radius:7px;background:hsl(var(--background));padding:8px 27px 8px 10px;font-size:12px;min-height:38px;max-width:210px}
 .has-navigation .toolbar .sort{margin-left:auto}
-.has-navigation .segmented{display:flex;background:var(--nav-soft);padding:3px;border-radius:7px;gap:2px}
-.has-navigation .segmented :is(button,a){font-size:11px;padding:6px 10px;min-height:32px;border:0;background:none;border-radius:5px;color:var(--nav-muted);display:flex;align-items:center}
-.has-navigation .segmented .active{background:hsl(var(--background));color:var(--nav-ink);box-shadow:0 1px 3px #00000010}
 .has-navigation .projects-table{border:1px solid var(--nav-line);border-radius:12px;overflow:hidden}
 .has-navigation .project-table-head,.has-navigation .project-table-row{display:grid;grid-template-columns:minmax(0,1fr) 82px 88px 107px 88px;gap:18px;align-items:center;padding:14px 20px}
 .has-navigation .project-table-head{font-size:10px;color:var(--nav-muted);background:var(--nav-hover)}
@@ -467,7 +464,7 @@ body.has-navigation{
 .has-navigation .members-panel li+li{border-top:1px solid var(--nav-line)}
 .has-navigation .members-panel li>span:first-child{min-width:0;overflow-wrap:anywhere}
 .has-navigation .members-panel .role{flex:none}
-.has-navigation .group-title{color:var(--nav-muted);font-size:11px;font-weight:500;margin:24px 0 9px}
+.has-navigation .group-title{color:var(--nav-muted);font-size:11px;font-weight:500;margin:24px 0 9px;display:flex;align-items:center;gap:7px}
 .has-navigation .project-sessions.in-project .session-row{grid-template-columns:minmax(0,1fr) 137px 67px 90px;min-height:86px}
 .has-navigation .project-sessions .session-note{max-width:68ch}
 .has-navigation .msg-count{font-size:11px;color:var(--nav-muted);text-align:right;white-space:nowrap}
@@ -541,8 +538,7 @@ body.has-navigation{
   .has-navigation .toolbar{gap:8px;margin-bottom:16px}.has-navigation .searchbox{max-width:none;flex-basis:100%;min-height:44px}
   .has-navigation .searchbox input{font-size:16px}.has-navigation .searchbox input::placeholder{font-size:12px}
   .has-navigation .toolbar select{min-height:44px;font-size:16px;max-width:100%;flex:1;min-width:0}
-  .has-navigation .toolbar .sort{margin-left:0}.has-navigation .segmented{margin-right:auto}
-  .has-navigation .segmented :is(a,button){min-height:38px}
+  .has-navigation .toolbar .sort{margin-left:0}
   .has-navigation .projects-table{border:0;border-radius:0;display:grid;gap:12px}
   .has-navigation .project-table-head{display:none}
   .has-navigation .project-table-row{border:1px solid var(--nav-line);border-radius:10px;padding:17px;grid-template-columns:1fr auto;gap:12px;min-height:0}
