@@ -2,7 +2,7 @@ import { readerLine } from "../../skills/share-session/scripts/transcript";
 import type { Identity } from "../auth";
 import { canManageSession, MEMBER, roleIn, VISIBLE, visibleSince } from "../db";
 import { getProjectSummaries } from "../navigation";
-import { appName, author, dateLabel, escapeHtml as e, icon, page } from "../ui";
+import { appName, author, dateLabel, escapeHtml as e, icon, page, statusIcon } from "../ui";
 
 type RecordLine = { type?: string; timestamp?: string; isMeta?: boolean; isCompactSummary?: boolean; toolUseResult?: unknown; message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, number> } };
 
@@ -170,16 +170,18 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
     : expired ? '<button class="btn primary" type="button" disabled data-expired>Lien expiré</button>'
     : `<a class="btn primary" href="${e(session.external_url)}" target="_blank" rel="noopener noreferrer">${icon("chat")}Ouvrir dans ${e(app)}</a>`;
   const done = session.done_at !== null;
-  const statusButton = canManage ? `<button class="btn" type="button" data-session-status="${e(id)}" data-status="${done ? "active" : "done"}" disabled>${done ? "Rouvrir" : "Marquer terminée"}</button>` : "";
+  const doneLabel = done ? `<span>Terminée ${dateLabel(Number(session.done_at), true)}</span>` : "<span>En cours</span>";
+  // The pill is both the state and its toggle; readers without rights only see a closed session's state.
+  const statusPill = canManage ? `<button class="status-pill${done ? " is-done" : ""}" type="button" data-session-status="${e(id)}" data-status="${done ? "active" : "done"}" disabled>${statusIcon(done, false)}${doneLabel}<span class="act">${done ? "Rouvrir" : "Marquer terminée"}</span></button>`
+    : done ? `<span class="status-pill is-done">${statusIcon(true, false)}${doneLabel}</span>` : "";
   const model = session.model || records.find((r) => r.data.message?.model)?.data.message?.model;
   const meta = (label: string, value: unknown, mono = false) => value == null || value === "" ? "" : `<dt>${label}</dt><dd${mono ? ' class="mono"' : ""}>${e(value)}</dd>`;
   return page(String(session.title || id), `<div class="detail">
-    <header class="dhead"><h1>${e(session.title || id)}</h1>
+    <header class="dhead${done ? " is-done" : ""}">${statusPill}<h1>${e(session.title || id)}</h1>
       <details class="hmeta" data-meta open><summary>${icon("chev")}Détails${app ? "" : ` · ${tokens} tokens · ${records.length} messages`}</summary>
       ${session.summary ? `<p class="sum">${e(session.summary)}</p>` : ""}
       <div class="line">${author(session.owner_name, session.owner_email)}
         ${app ? `<span class="badge">${e(app)}</span>` : ""}
-        ${done ? '<span class="badge">Terminée</span>' : ""}
         <span class="badge">synchro ${dateLabel(Number(session.last_synced_at), true)}</span>
         <span class="badge mono">${icon("folder")}${e(session.project)}</span>
         ${session.repo ? `<span class="badge mono">${icon("term")}${e(session.repo)}</span>` : ""}
@@ -191,8 +193,8 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
       </div>
       ${app ? "" : `<p class="hint">${tokens} tokens · ${records.length} messages</p>`}</details>
       ${session.owner_email !== who.email && !app ? `<p class="ro-note">Lecture seule : session de ${e(session.owner_email)}. Si vous la reprenez, la copie sera à votre nom.</p>` : ""}
-      ${statusButton ? '<p class="ro-note" role="alert" data-status-error hidden></p>' : ""}
-      <div class="actionbar gutter"><div class="in">${action}${statusButton}</div></div>
+      ${canManage ? '<p class="ro-note" role="alert" data-status-error hidden></p>' : ""}
+      <div class="actionbar gutter"><div class="in">${action}</div></div>
     </header>
     <aside class="side" aria-label="Informations de la session">
       <details class="panel" data-meta open><summary>Informations<span class="tchev">${icon("chev")}</span></summary><div class="pb"><dl class="meta">

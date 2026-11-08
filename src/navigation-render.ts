@@ -1,6 +1,6 @@
 import type { ProjectSummary } from "./navigation";
 import type { Role } from "./db";
-import { appName, dateLabel, escapeHtml as e, icon, initials } from "./ui";
+import { appName, dateLabel, escapeHtml as e, icon, initials, statusIcon } from "./ui";
 
 export type NavigationSession = {
   id: string; title: string | null; summary: string | null; project: string;
@@ -16,10 +16,10 @@ export const folder = () => `<span class="folder-icon">${icon("folder")}</span>`
 export function sessionRow(s: NavigationSession, projects: ProjectSummary[], email: string, returnTo: string, inProject = false): string {
   const p = projects.find((project) => project.slug === s.project);
   const name = s.owner_name || s.owner_email;
-  return `<article class="session-row"><div><a class="session-title" href="${e(sessionHref(s.id, returnTo))}">${e(s.title || s.id)}</a>
-    ${s.external_app || s.done_at ? `<p class="session-note">${[s.external_app && `<span class="badge">${e(appName(s.external_app))}</span>`, s.done_at && '<span class="badge">Terminée</span>'].filter(Boolean).join(" ")}</p>` : ""}
+  return `<article class="session-row${s.done_at ? " is-done" : ""}"><div class="session-main">${statusIcon(Boolean(s.done_at))}<div><a class="session-title" href="${e(sessionHref(s.id, returnTo))}">${e(s.title || s.id)}</a>
+    ${s.external_app ? `<p class="session-note"><span class="badge">${e(appName(s.external_app))}</span></p>` : ""}
     ${(inProject ? s.summary : s.repo) ? `<p class="session-note">${e(inProject ? s.summary : s.repo)}</p>` : ""}
-    ${s.continued_from || s.forked_from ? `<p class="session-note provenance">${s.continued_from ? "suite d’une session compactée" : ""}${s.continued_from && s.forked_from ? " · " : ""}${s.forked_from ? `fork de la session de ${e(s.forked_from_owner || s.forked_from)}` : ""}</p>` : ""}</div>
+    ${s.continued_from || s.forked_from ? `<p class="session-note provenance">${s.continued_from ? "suite d’une session compactée" : ""}${s.continued_from && s.forked_from ? " · " : ""}${s.forked_from ? `fork de la session de ${e(s.forked_from_owner || s.forked_from)}` : ""}</p>` : ""}</div></div>
     ${inProject ? "" : `<a class="project-chip" href="${e(projectPath(s.project))}">${e(p?.name || s.project)}</a>`}
     <div class="list-author" title="${e(s.owner_email)}"><span class="avatar" aria-hidden="true">${e(initials(name))}</span><span>${e(s.owner_email.toLowerCase() === email.toLowerCase() ? "Vous" : name)}</span></div>
     ${inProject ? `<span class="msg-count">${e(s.msg_count)} msg</span>` : ""}

@@ -128,6 +128,17 @@ body.is-detail main{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))
 .project-settings [role=alert]{color:hsl(var(--destructive-text));overflow-wrap:anywhere}
 .btn:disabled{opacity:.5;cursor:wait}
 .btn[data-expired]{cursor:not-allowed}
+svg.st{width:16px;height:16px;flex:none;color:var(--nav-accent,hsl(var(--foreground)))}
+svg.st.is-done{color:var(--nav-good,hsl(var(--success)))}
+svg.st .st-check{stroke:hsl(var(--background))}
+.status-pill{align-self:flex-start;min-height:32px;border:1px solid color-mix(in srgb,currentColor 25%,transparent);background:color-mix(in srgb,currentColor 9%,hsl(var(--background)));color:var(--nav-accent,hsl(var(--foreground)));border-radius:999px;padding:0 12px 0 8px;font:inherit;font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:7px}
+.status-pill.is-done{color:var(--nav-good,hsl(var(--success)))}
+.status-pill .act{text-decoration:underline;text-underline-offset:3px}
+.status-pill .act:before{content:"·";display:inline-block;margin-right:7px;opacity:.5;text-decoration:none}
+button.status-pill{cursor:pointer}
+button.status-pill:disabled{opacity:.5;cursor:wait}
+@media(pointer:coarse){.status-pill{min-height:44px}}
+.dhead.is-done h1{color:var(--nav-muted,hsl(var(--muted-foreground)))}
 
 /* Badge shadcn : secondary (tags) / outline (statuts, projet, fork) */
 .chip,.badge{font-size:12px;font-weight:500;line-height:18px;padding:1px 8px;border-radius:calc(var(--radius) - 2px);display:inline-flex;gap:6px;align-items:center;max-width:100%;white-space:nowrap}
@@ -383,6 +394,13 @@ body.has-navigation{
 .has-navigation .session-note{margin:5px 0 0;color:var(--nav-muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65ch}
 .has-navigation .project-chip{position:relative;z-index:2;justify-self:start;display:inline-flex;align-items:center;gap:6px;font-size:11px;border:1px solid var(--nav-line);border-radius:5px;padding:3px 7px;max-width:100%;background:hsl(var(--background));overflow-wrap:anywhere}
 .has-navigation .project-chip:hover{border-color:var(--tone,var(--nav-accent));color:var(--nav-accent)}
+.has-navigation .session-main{display:flex;gap:10px;align-items:flex-start}
+.has-navigation .session-main>div{flex:1;min-width:0}
+.has-navigation .session-main>.st{margin-top:2px}
+.has-navigation .session-row.is-done{background:var(--nav-side)}
+.has-navigation .session-row.is-done:hover{background:var(--nav-hover)}
+.has-navigation .session-row.is-done .session-title:not(:hover){color:var(--nav-muted);font-weight:450}
+.has-navigation .session-row.is-done .project-chip,.has-navigation .session-row.is-done .list-author{color:var(--nav-muted)}
 .has-navigation .list-author,.has-navigation .list-author .author{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--nav-muted);min-width:0}
 .has-navigation .list-author>span:last-child,.has-navigation .list-author .author>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .has-navigation .list-author .avatar{width:23px;height:23px;font-size:8px}
@@ -579,6 +597,10 @@ const icons = {
 
 /** SVG paths are static; metadata never enters SVG markup. */
 export const icon = (name: keyof typeof icons) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${icons[name]}</svg>`;
+/** Session status mark: half ring while active, filled check once done. Decorative inside a labelled control. */
+export const statusIcon = (done: boolean, labelled = true) => `<svg class="st${done ? " is-done" : ""}" viewBox="0 0 16 16" ${labelled ? `role="img" aria-label="${done ? "Terminée" : "En cours"}"` : 'aria-hidden="true"'}>${done
+  ? '<circle cx="8" cy="8" r="7" fill="currentColor"/><path class="st-check" d="M4.9 8.2l2.1 2.1 4.1-4.6" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>'
+  : '<circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 3.5a4.5 4.5 0 0 1 0 9z" fill="currentColor"/>'}</svg>`;
 /** Display name of the app hosting a relayed session. */
 export const appName = (slug: unknown) => ({ t3code: "T3 Code" } as Record<string, string>)[String(slug)] ?? String(slug);
 export const initials = (name: unknown) => String(name || "?").trim().split(/\s+/).slice(0, 2).map((s) => Array.from(s)[0]).join("").toUpperCase();

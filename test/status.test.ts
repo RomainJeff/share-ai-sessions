@@ -67,18 +67,25 @@ describe("session status", () => {
     expect((await broker(crypto.randomUUID(), "status", { status: "done" })).status).toBe(403);
   });
 
-  it("shows the badge in lists and the reader, and the toggle only to those who can use it", async () => {
+  it("shows the status mark in lists and the pill in the reader, as a toggle only for those who can use it", async () => {
     const { project, id } = await fixture();
     const html = async (email: string, path: string) => (await call(email, path)).text();
     await put(ALICE, `/api/projects/${project}/members/${CAROL}`, { role: "writer" });
-    expect(await html(BOB, `/s/${id}`)).toContain(`data-status="done" disabled>Marquer terminée</button>`);
-    expect(await html(CAROL, `/s/${id}`)).not.toContain("data-session-status=");
+    expect(await html(BOB, `/s/${id}`)).toMatch(/<button class="status-pill" type="button" data-session-status="[^"]+" data-status="done" disabled>.*En cours.*Marquer terminée<\/span><\/button>/);
+    const carolActive = await html(CAROL, `/s/${id}`);
+    expect(carolActive).not.toContain("data-session-status=");
+    expect(carolActive).not.toContain(`class="status-pill`);
 
     await setStatus(BOB, id, "done");
     const reader = await html(ALICE, `/s/${id}`);
-    expect(reader).toContain('<span class="badge">Terminée</span>');
-    expect(reader).toContain(`data-status="active" disabled>Rouvrir</button>`);
-    expect(await html(ALICE, `/projects/${project}?status=done`)).toMatch(/Finished work<\/a>\s*<p class="session-note"><span class="badge">Terminée<\/span>/);
+    expect(reader).not.toContain('<span class="badge">Terminée</span>');
+    expect(reader).toContain('<header class="dhead is-done">');
+    expect(reader).toMatch(/class="status-pill is-done"[^>]*data-status="active" disabled>.*Terminée .*Rouvrir<\/span><\/button>/);
+    expect(await html(CAROL, `/s/${id}`)).toMatch(/<span class="status-pill is-done">.*Terminée /);
+    const list = await html(ALICE, `/projects/${project}?status=done`);
+    expect(list).toContain('<article class="session-row is-done"><div class="session-main"><svg class="st is-done"');
+    expect(list).toContain('aria-label="Terminée"');
+    expect(list).not.toContain('<span class="badge">Terminée</span>');
     expect(await html(ALICE, `/projects/${project}?status=active`)).not.toContain("Finished work");
   });
 });
