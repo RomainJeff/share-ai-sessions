@@ -62,23 +62,51 @@ describe("relayed sessions", () => {
     expect((await relay(crypto.randomUUID(), { ...body, project: "team" })).status).toBe(400);
   });
 
-  it("keeps hosted and relayed sessions apart", async () => {
-    const hosted = crypto.randomUUID();
-    expect((await upload(hosted)).status).toBe(201);
-    expect((await relay(hosted, { app: "t3code", url: LINK, project: "team" })).status).toBe(409);
-
+  it("refuses deltas and bundles for a relay without a transcript", async () => {
     const id = crypto.randomUUID();
     await relay(id, { app: "t3code", url: LINK, project: "team" });
-    for (const response of [
-      await upload(id),
-      await SELF.fetch(`${BASE}/${id}`, { method: "PATCH", headers: { ...await auth(), "X-Base-Offset": "0" }, body: "{}\n" }),
-    ]) {
-      expect(response.status).toBe(409);
-      expect(await response.json()).toEqual({ error: "session is relayed from t3code" });
-    }
+    const patch = await SELF.fetch(`${BASE}/${id}`, { method: "PATCH", headers: { ...await auth(), "X-Base-Offset": "0" }, body: "{}\n" });
+    expect(patch.status).toBe(409);
+    expect(await patch.json()).toEqual({ error: "session is relayed from t3code without a transcript: upload it first" });
     const bundle = await SELF.fetch(`${BASE}/${id}/bundle`, { headers: { ...await auth(BOB), Accept: "application/json" } });
     expect(bundle.status).toBe(409);
     expect(((await bundle.json()) as { error: string }).error).toBe(`session is relayed from t3code: no transcript is stored here, open ${LINK}`);
+  });
+
+  it("keeps the link and the transcript together, in either order", async () => {
+    const relayedFirst = crypto.randomUUID();
+    await relay(relayedFirst, { app: "t3code", url: LINK, project: "team" });
+    expect((await upload(relayedFirst)).status).toBe(200);
+    const appended = await SELF.fetch(`${BASE}/${relayedFirst}`, { method: "PATCH", headers: { ...await auth(), "X-Base-Offset": "16" }, body: '{"type":"assistant"}\n' });
+    expect(appended.status).toBe(200);
+    expect((await relay(relayedFirst, { app: "t3code", url: "https://t3.example.com/guest#invite-two" })).status).toBe(200);
+    const row = await (await SELF.fetch(`${BASE}/${relayedFirst}`, { headers: await auth() })).json();
+    expect(row).toMatchObject({ external_app: "t3code", external_url: "https://t3.example.com/guest#invite-two", bytes: 37 });
+    const bundle = await SELF.fetch(`${BASE}/${relayedFirst}/bundle`, { headers: await auth(BOB) });
+    expect(bundle.status).toBe(200);
+    expect(await bundle.text()).toContain('{"type":"assistant"}');
+
+    const hostedFirst = crypto.randomUUID();
+    expect((await upload(hostedFirst)).status).toBe(201);
+    expect((await relay(hostedFirst, { app: "t3code", url: LINK, project: "team" })).status).toBe(200);
+    expect((await upload(hostedFirst)).status).toBe(200);
+    expect(await (await SELF.fetch(`${BASE}/${hostedFirst}`, { headers: await auth() })).json()).toMatchObject({ external_url: LINK, bytes: 16 });
+  });
+
+  it("shows a relayed transcript to readers, with the app link and resume", async () => {
+    const id = crypto.randomUUID();
+    await relay(id, { app: "t3code", url: LINK, project: "team", title: "Relayed with transcript" });
+    const form = new FormData();
+    form.set("meta", JSON.stringify({ id, project: "team" }));
+    form.set("jsonl", new File([JSON.stringify({ type: "user", message: { role: "user", content: "Hello from T3" }, timestamp: "2026-01-01T00:00:00Z" }) + "\n"], "s.jsonl"));
+    expect((await SELF.fetch(BASE, { method: "POST", body: form, headers: await auth() })).status).toBe(200);
+    const html = await (await SELF.fetch(`${ORIGIN}/s/${id}`, { headers: await auth(BOB) })).text();
+    expect(html).toContain('id="conversation"');
+    expect(html).toContain("Hello from T3");
+    expect(html).toContain("Ouvrir dans T3 Code");
+    expect(html).toMatch(/<button class="btn" type="button" data-copy="\/share-session pull [^"]+">.*Reprendre<\/button>/);
+    expect(html).toContain("Commande de reprise");
+    expect(html).toContain("Hébergée par");
   });
 
   it("opens the app from the reader and lists a badge, without transcript or resume", async () => {

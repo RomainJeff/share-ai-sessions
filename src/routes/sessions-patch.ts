@@ -8,7 +8,8 @@ export async function patchSession(request: Request, env: Env, who: Identity, { 
     .bind(id).first<{ owner_email: string; project: string; bytes: number; segment_count: number; external_app: string | null }>();
   if (!session) return Response.json({ error: "not found" }, { status: 404 });
   if (session.owner_email !== who.email) return Response.json({ error: "forbidden" }, { status: 403 });
-  if (session.external_app) return Response.json({ error: `session is relayed from ${session.external_app}` }, { status: 409 });
+  // A relay without a transcript yet: the first one is a full upload, never a delta.
+  if (!session.segment_count) return Response.json({ error: `session is relayed from ${session.external_app} without a transcript: upload it first` }, { status: 409 });
   if (!atLeast(await roleIn(env, session.project, who.email), "writer")) {
     return Response.json({ error: `writer role required on project ${session.project}` }, { status: 403 });
   }
