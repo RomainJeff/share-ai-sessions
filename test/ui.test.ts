@@ -306,7 +306,9 @@ describe("web reader", () => {
     // Turns are anchored; the reader opens on the last one.
     expect(html).toContain('<section class="tturn" id="t1" aria-label="Tour 1">');
     expect(html).toContain('<section class="tturn" id="t2" aria-label="Tour 2">');
-    expect(html).toContain("<span data-turn-label>Tour 2/2</span>");
+    expect(html).toContain('<nav class="turnrail" aria-label="Tours de la conversation" tabindex="0" data-rail>');
+    expect(html).toMatch(/<a href="#t2" data-turn-link><span class="n">2<\/span><span class="tt">[^<]+<\/span><\/a>/);
+    expect(html).not.toContain("data-turn-label");
     expect(html).toContain("data-levels hidden");
     const script = html.match(/<script nonce="[^"]+">([^]*?)<\/script>/)![1]!;
     expect(script).toContain("turns.at(-1)");

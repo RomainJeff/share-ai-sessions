@@ -216,6 +216,7 @@ async function readConversation(env: Env, id: string) {
   }
   const total: Stats = { tools: 0, edits: 0, errors: 0 };
   let conversation = "", turns = 0;
+  const titles: string[] = [];
   for (let start = 0, end = 0; start < records.length; start = end) {
     end = start + 1;
     while (end < records.length && !isHumanPrompt(records[end]!.data)) end++;
@@ -232,6 +233,7 @@ async function readConversation(env: Env, id: string) {
       turns++;
       const value = prompt.data.message?.content;
       const images = Array.isArray(value) ? value.filter((b) => b?.type === "image").length : 0;
+      titles.push(promptText(value).replace(/[#*_`>]/g, "").replace(/\s+/g, " ").trim().slice(0, 90) || (images ? plural(images, "image jointe") : "Sans texte"));
       html += `<article class="turn me" data-role="user"><span class="avatar lg" aria-hidden="true">U</span><div class="col">
         <div class="meta-l"><b>Utilisateur</b><a href="#t${turns}">Tour ${turns}</a>${prompt.data.timestamp ? dateLabel(prompt.data.timestamp) : ""}</div>
         <div class="bubble">${markdownHtml(promptText(value))}${images ? `<span class="md-img">${plural(images, "image jointe")}</span>` : ""}</div>${raw([prompt.raw])}</div></article>`;
@@ -257,7 +259,7 @@ async function readConversation(env: Env, id: string) {
     }
     conversation += prompt ? `<section class="tturn" id="t${turns}" aria-label="Tour ${turns}">${html}</section>` : html;
   }
-  return { harness, records, invalid, usages, tokens, conversation, turns, ...total };
+  return { harness, records, invalid, usages, tokens, conversation, turns, titles, ...total };
 }
 
 /** GET /s/:id — metadata is retention-checked before reading any transcript from R2. */
@@ -287,10 +289,10 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
 
   // A relay without a transcript has nothing in R2; one with a transcript reads like a hosted session.
   const hosted = Number(session.segment_count) > 0;
-  const transcript = !hosted ? { harness: "Claude", records: [] as TranscriptRecord[], invalid: 0, usages: new Map<string, Record<string, number>>(), tokens: 0, conversation: "", turns: 0, tools: 0, edits: 0, errors: 0 }
+  const transcript = !hosted ? { harness: "Claude", records: [] as TranscriptRecord[], invalid: 0, usages: new Map<string, Record<string, number>>(), tokens: 0, conversation: "", turns: 0, titles: [] as string[], tools: 0, edits: 0, errors: 0 }
     : await readConversation(env, id);
   if (!transcript) return page("Transcript indisponible", "<h1>Transcript indisponible</h1>", 503);
-  const { harness, records, invalid, usages, tokens, conversation, turns, tools } = transcript;
+  const { harness, records, invalid, usages, tokens, conversation, turns, titles, tools } = transcript;
   const canManage = canManageSession(await roleIn(env, String(session.project), who.email), String(session.owner_email), who.email);
   const destinations = canManage ? (await env.DB.prepare(`SELECT p.slug, p.name FROM projects p
     JOIN project_members m ON m.project = p.slug WHERE m.email = lower(?) AND m.role IN ('owner', 'writer') AND p.slug != ? ORDER BY p.name`)
@@ -322,7 +324,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
   const meta = (label: string, value: unknown, mono = false) => value == null || value === "" ? "" : `<dt>${label}</dt><dd${mono ? ' class="mono"' : ""}>${e(value)}</dd>`;
   return page(String(session.title || id), `<div class="detail">
     <header class="dhead${done ? " is-done" : ""}">${statusPill}<h1>${e(session.title || id)}</h1>
-      <details class="hmeta" data-meta open><summary>${icon("chev")}Détails${hosted ? ` · ${tokens} tokens · ${records.length} messages · ${plural(turns, "tour")} · ${plural(tools, "outil")}` : ""}</summary>
+      <details class="hmeta"><summary>${icon("chev")}Détails${hosted ? ` · ${tokens} tokens · ${records.length} messages · ${plural(turns, "tour")} · ${plural(tools, "outil")}` : ""}</summary>
       ${session.summary ? `<p class="sum">${e(session.summary)}</p>` : ""}
       <div class="line">${author(session.owner_name, session.owner_email)}
         ${app ? `<span class="badge">${e(app)}</span>` : ""}
@@ -335,7 +337,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
         ${continuation ? `<span class="badge">${icon("branch")}suite dans <a href="/s/${e(encodeURIComponent(String(continuation.id)))}">${e(continuation.id)}</a></span>` : ""}
         ${session.forked_from ? `<span class="badge">${icon("branch")}forké depuis <a href="/s/${e(encodeURIComponent(String(session.forked_from)))}">${e(session.forked_from)}</a> · ${e(session.forked_from_owner)}</span>` : ""}
       </div>
-      ${hosted ? `<p class="hint">${tokens} tokens · ${records.length} messages · ${plural(turns, "tour")} · ${plural(tools, "outil")}</p>` : ""}</details>
+      </details>
       ${session.owner_email !== who.email && hosted ? `<p class="ro-note">Lecture seule : session de ${e(session.owner_email)}. Si vous la reprenez, la copie sera à votre nom.</p>` : ""}
       ${canManage ? '<p class="ro-note" role="alert" data-status-error hidden></p>' : ""}
       <div class="actionbar gutter"><div class="in">${action}</div></div>
@@ -359,8 +361,9 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
       ${movePanel}
     </aside>
     ${!hosted ? "" : `<section class="chat transcript" id="conversation" tabindex="0" aria-label="Conversation"><div class="chat-head"><h2 class="chat-title">Conversation</h2>
-      ${turns > 1 ? `<div class="turnnav" data-turns hidden><button type="button" data-turn="-1" aria-label="Tour précédent">${icon("chev")}</button><span data-turn-label>Tour ${turns}/${turns}</span><button type="button" data-turn="1" aria-label="Tour suivant">${icon("chev")}</button></div>` : ""}
       <div class="levels" role="group" aria-label="Niveau de détail" data-levels hidden><button type="button" data-level="conv">Conversation</button><button type="button" data-level="normal">Normal</button><button type="button" data-level="full">Détaillé</button></div></div>
+      ${turns > 1 ? `<nav class="turnrail" aria-label="Tours de la conversation" tabindex="0" data-rail><div class="ticks" aria-hidden="true">${titles.map(() => "<i></i>").join("")}</div>
+        <ol class="rail-list">${titles.map((t, i) => `<li><a href="#t${i + 1}" data-turn-link><span class="n">${i + 1}</span><span class="tt">${e(t)}</span></a></li>`).join("")}</ol></nav>` : ""}
       ${invalid ? `<p class="ro-note">${invalid} ligne(s) JSONL invalide(s) ignorée(s).</p>` : ""}
       ${conversation || '<p class="empty">Aucun message.</p>'}
     </section>`}</div>`, 200, true, {
