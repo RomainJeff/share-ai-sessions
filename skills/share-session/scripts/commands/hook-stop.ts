@@ -1,34 +1,10 @@
-import { createReadStream } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { ClientError } from "../lib.ts";
-import { readManifest, writeManifest, type Entry } from "../manifest.ts";
+import { readManifest, writeManifest } from "../manifest.ts";
 import { syncSession } from "./sync.ts";
+import { continuationParent } from "./upload.ts";
 
 const client = fileURLToPath(new URL("../client.ts", import.meta.url));
-
-/**
- * Claude Code continues a compacted conversation under a new session id: the new transcript
- * starts with the parent's compact_boundary line, same uuid. Structural match only ("uuid":"…"),
- * so a uuid quoted inside message text (escaped quotes) never links sessions.
- */
-async function continuationParent(path: string, sessions: Record<string, Entry>): Promise<Entry | undefined> {
-  let first: { type?: string; subtype?: string; uuid?: string } | undefined;
-  // Stream: runs on every Stop of every unshared session, transcripts can be large.
-  for await (const line of createInterface({ input: createReadStream(path) })) {
-    let parsed;
-    try { parsed = JSON.parse(line); } catch { continue; }
-    if (typeof parsed?.uuid === "string") { first = parsed; break; }
-  }
-  if (first?.type !== "system" || first.subtype !== "compact_boundary") return;
-  const needle = `"uuid":${JSON.stringify(first.uuid)}`;
-  for (const entry of Object.values(sessions)) {
-    // ponytail: reads each shared transcript once per unknown session; only runs until the user is asked.
-    const text = await readFile(entry.path, "utf8").catch(() => "");
-    if (text.includes(needle)) return entry;
-  }
-}
 
 export async function hookStop(): Promise<void> {
   let id = "";

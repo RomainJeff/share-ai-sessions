@@ -1,10 +1,12 @@
 import { harnessOf, readerLine } from "../transcript.ts";
 import { createHash } from "node:crypto";
 import { parseArgs } from "node:util";
+import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { createInterface } from "node:readline";
 import { basename } from "node:path";
 import { api, ClientError } from "../lib.ts";
-import { readManifest, trackUpload } from "../manifest.ts";
+import { readManifest, trackUpload, type Entry } from "../manifest.ts";
 import { detectRepo } from "../repo.ts";
 import { stopHookInstalled } from "./doctor.ts";
 import { redactJsonl, type RedactionOptions } from "../redact.ts";
@@ -57,6 +59,28 @@ export function sanitize(jsonl: string, options: RedactionOptions = {}) {
 }
 
 /**
+ * Claude Code continues a compacted conversation under a new session id: the new transcript
+ * starts with the parent's compact_boundary line, same uuid. Structural match only ("uuid":"…"),
+ * so a uuid quoted inside message text (escaped quotes) never links sessions.
+ */
+export async function continuationParent(path: string, sessions: Record<string, Entry>): Promise<Entry | undefined> {
+  let first: { type?: string; subtype?: string; uuid?: string } | undefined;
+  // Stream: runs on every Stop of every unshared session, transcripts can be large.
+  for await (const line of createInterface({ input: createReadStream(path) })) {
+    let parsed;
+    try { parsed = JSON.parse(line); } catch { continue; }
+    if (typeof parsed?.uuid === "string") { first = parsed; break; }
+  }
+  if (first?.type !== "system" || first.subtype !== "compact_boundary") return;
+  const needle = `"uuid":${JSON.stringify(first.uuid)}`;
+  for (const entry of Object.values(sessions)) {
+    // ponytail: reads each shared transcript once per unknown session; only runs until the user is asked.
+    const text = await readFile(entry.path, "utf8").catch(() => "");
+    if (text.includes(needle)) return entry;
+  }
+}
+
+/**
  * The user picks the project of a new session. Once shared, a session, its forks and its compaction
  * continuations stay in that project: the server keeps it when `project` is omitted and refuses a change.
  */
@@ -65,14 +89,17 @@ async function prepare(path: string, jsonl: string, options: UploadOptions) {
   const { sessions, forks, continuations, relays } = await readManifest();
   const relayed = relays?.[meta.id];
   if (relayed) throw new ClientError("relayed", `Session is relayed from ${relayed.app}; its transcript is never uploaded. Renew the link with relay`);
-  const inherited = !!(sessions[meta.id] || forks?.[meta.id] || continuations?.[meta.id]);
+  // A continuation uploaded without the Stop hook's prompt (another hook, or by hand) is linked too.
+  const continuation = continuations?.[meta.id] ?? (sessions[meta.id] || forks?.[meta.id] ? undefined :
+    await continuationParent(path, sessions).then((parent) => parent && { continued_from: parent.id }));
+  const inherited = !!(sessions[meta.id] || forks?.[meta.id] || continuation);
   const body = {
     ...meta, cwd_base: cwd, repo: detectRepo(cwd ?? process.cwd()),
     ...(options.project ? { project: options.project.toLowerCase() } : {}),
-    ...forks?.[meta.id], ...continuations?.[meta.id],
+    ...forks?.[meta.id], ...continuation,
   };
   const project = options.project?.toLowerCase() ?? sessions[meta.id]?.project ??
-    (forks?.[meta.id] ? "same as the forked session" : continuations?.[meta.id] ? "same as the compacted session" : "unchanged");
+    (forks?.[meta.id] ? "same as the forked session" : continuation ? "same as the compacted session" : "unchanged");
   return { id: meta.id, project, inherited, redacted: sanitize(jsonl, options), metadata: redactJsonl(JSON.stringify(body)) };
 }
 

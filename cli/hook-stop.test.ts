@@ -288,6 +288,24 @@ test("a compaction continuation of a shared session blocks once to ask consent, 
   } finally { await f.cleanup(); }
 });
 
+test("a compaction continuation uploaded without the hook's prompt is still linked to its shared parent", async () => {
+  const f = await syncFixture();
+  try {
+    const boundary = randomUUID();
+    const system = (sessionId: string) => JSON.stringify({ type: "system", subtype: "compact_boundary", uuid: boundary, sessionId }) + "\n";
+    await writeFile(f.path, f.line("before compaction") + system(f.id));
+    await f.optIn();
+    const child = randomUUID();
+    const childPath = join(f.temp, ".claude/projects/test", `${child}.jsonl`);
+    await writeFile(childPath, system(child) + f.line("after compaction"));
+
+    const { confirmation, preview } = await upload(childPath) as { confirmation: string; preview: { project: string } };
+    assert.equal(preview.project, "same as the compacted session");
+    await upload(childPath, { confirm: confirmation });
+    assert.equal(JSON.parse(f.meta()).continued_from, f.id);
+  } finally { await f.cleanup(); }
+});
+
 test("continuation detection ignores non-boundary starts, quoted uuids and stopped sessions", async () => {
   const f = await syncFixture();
   try {
