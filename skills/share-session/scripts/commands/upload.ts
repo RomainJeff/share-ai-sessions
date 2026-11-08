@@ -47,7 +47,8 @@ export function readMeta(jsonl: string, fileName: string) {
   };
 }
 
-export type UploadOptions = RedactionOptions & { confirm?: string; project?: string };
+/** `as`: server id to upload under, e.g. the id a session is relayed under, when it differs from the transcript's own id. */
+export type UploadOptions = RedactionOptions & { confirm?: string; project?: string; as?: string };
 
 /** Opt-in marker echoed on stdout; Claude's transcript keeps it, so sync can recover id and strip policy after a lost manifest. */
 export const optInMarker = (id: string, options: RedactionOptions = {}) =>
@@ -85,21 +86,21 @@ export async function continuationParent(path: string, sessions: Record<string, 
  * continuations stay in that project: the server keeps it when `project` is omitted and refuses a change.
  */
 async function prepare(path: string, jsonl: string, options: UploadOptions) {
-  const { cwd, ...meta } = readMeta(jsonl, path);
+  const { cwd, ...read } = readMeta(jsonl, path);
+  const meta = { ...read, id: options.as ?? read.id };
   const { sessions, forks, continuations, relays } = await readManifest();
-  const relayed = relays?.[meta.id];
-  if (relayed) throw new ClientError("relayed", `Session is relayed from ${relayed.app}; its transcript is never uploaded. Renew the link with relay`);
   // A continuation uploaded without the Stop hook's prompt (another hook, or by hand) is linked too.
   const continuation = continuations?.[meta.id] ?? (sessions[meta.id] || forks?.[meta.id] ? undefined :
     await continuationParent(path, sessions).then((parent) => parent && { continued_from: parent.id }));
-  const inherited = !!(sessions[meta.id] || forks?.[meta.id] || continuation);
+  // A relay already set the project on the server.
+  const inherited = !!(sessions[meta.id] || forks?.[meta.id] || continuation || relays?.[meta.id]);
   const body = {
     ...meta, cwd_base: cwd, repo: detectRepo(cwd ?? process.cwd()),
     ...(options.project ? { project: options.project.toLowerCase() } : {}),
     ...forks?.[meta.id], ...continuation,
   };
   const project = options.project?.toLowerCase() ?? sessions[meta.id]?.project ??
-    (forks?.[meta.id] ? "same as the forked session" : continuation ? "same as the compacted session" : "unchanged");
+    (relays?.[meta.id]?.project ?? (forks?.[meta.id] ? "same as the forked session" : continuation ? "same as the compacted session" : "unchanged"));
   return { id: meta.id, project, inherited, redacted: sanitize(jsonl, options), metadata: redactJsonl(JSON.stringify(body)) };
 }
 
@@ -165,16 +166,20 @@ export async function uploadCommand(args: string[]): Promise<unknown> {
       'strip-tool-results': { type: 'boolean' },
       confirm: { type: 'string' },
       project: { type: 'string' },
+      as: { type: 'string' },
     } });
   } catch {
-    throw new ClientError('usage', 'Usage: client.ts upload <path.jsonl> [--project <slug>] [--strip-thinking] [--strip-tool-results] [--confirm <preview hash>]');
+    throw new ClientError('usage', 'Usage: client.ts upload <path.jsonl> [--project <slug>] [--as <id>] [--strip-thinking] [--strip-tool-results] [--confirm <preview hash>]');
   }
   const [path] = parsed.positionals;
   if (!path || parsed.positionals.length !== 1) throw new ClientError('usage', 'Provide one transcript path');
+  const as = typeof parsed.values.as === 'string' ? parsed.values.as : undefined;
+  if (as !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(as)) throw new ClientError('usage', '--as must be a session id (UUID)');
   return upload(path, {
     stripThinking: parsed.values['strip-thinking'] === true,
     stripToolResults: parsed.values['strip-tool-results'] === true,
     confirm: typeof parsed.values.confirm === 'string' ? parsed.values.confirm : undefined,
     project: typeof parsed.values.project === 'string' ? parsed.values.project : undefined,
+    as,
   });
 }
