@@ -394,9 +394,9 @@ describe("web reader", () => {
     expect(await (await get("/")).text()).toContain('href="/share-session.skill"');
   });
 
-  it("serves the PWA manifest and icons behind Access and links them from every page", async () => {
+  it("serves the PWA manifest behind Access, icons publicly, and links them from every page", async () => {
     const manifest = await (await get("/manifest.webmanifest")).json() as { icons: { src: string }[] };
-    for (const { src } of manifest.icons) expect((await get(src)).status).toBe(200);
+    for (const { src } of manifest.icons) expect((await SELF.fetch(ORIGIN + src)).status).toBe(200);
     expect((await SELF.fetch(ORIGIN + "/manifest.webmanifest")).status).toBe(401);
     const html = await (await get("/")).text();
     expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">');

@@ -58,13 +58,14 @@ const ROUTES: [method: string, pattern: URLPattern, handler: Handler][] = [
   ["GET", new URLPattern({ pathname: "/s/:id" }), sessionDetailPage],
   ["GET", new URLPattern({ pathname: "/share-session.skill" }), skillDownload],
   ["GET", new URLPattern({ pathname: "/manifest.webmanifest" }), (request, env) => env.ASSETS.fetch(request)],
-  ["GET", new URLPattern({ pathname: "/icons/:file" }), (request, env) => env.ASSETS.fetch(request)],
 ];
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (url.origin === env.BROKER_ORIGIN && !url.pathname.startsWith("/api/")) return handleMcpHost(request, env, ctx);
+    // App icons are public: iOS fetches the home-screen icon without the Access cookie (Access needs a Bypass on /icons).
+    if (request.method === "GET" && url.pathname.startsWith("/icons/")) return env.ASSETS.fetch(request);
     // Access guards the custom domain; the Worker checks the JWT itself anyway (defence in depth).
     const who = await identify(request, env);
     if (!who) return Response.json({ error: "unauthorized" }, { status: 401 });

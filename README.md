@@ -24,6 +24,7 @@ Share Claude Code and Codex session transcripts with your team: upload, sync, br
 2. In Cloudflare Zero Trust:
    - an Access application on the reader host (e.g. `sessions.example.com`), allowing your team;
    - a Bypass policy on the MCP host (e.g. `sessions-mcp.example.com`); the Worker checks broker tokens itself;
+   - a Bypass application on the reader host's `/icons` path (e.g. `sessions.example.com/icons`): iOS fetches the home-screen icon without the Access cookie;
    - an Access SaaS OIDC application for the MCP OAuth flow, with redirect `https://<mcp host>/callback`.
 3. Copy `wrangler.toml` into your own deployment and replace every example value (routes, ids, `BROKER_ORIGIN`, `OIDC_CLIENT_ID`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`).
 4. Set the secrets: `wrangler secret put BROKER_SIGNING_KEY` (32+ bytes) and `wrangler secret put OIDC_CLIENT_SECRET`.
