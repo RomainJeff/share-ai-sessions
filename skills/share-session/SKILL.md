@@ -120,11 +120,11 @@ Sync publishes complete lines and waits for an unfinished final line. It reads t
 
 ## Browser reader
 
-Open the configured app URL for the five most recently synchronized sessions and direct access to active projects. **Projects** (`/projects`) lists all accessible projects, including empty ones, with session/member counts and latest synchronization. Open `/projects/<slug>` for that project’s sessions, ordered by synchronization time, with search, author selection, **À moi**, and pagination. **All sessions** (`/sessions`) searches across accessible projects; extra filters cover repo and inclusive UTC synchronization dates. Old `/?project=…` and list-filter links redirect to the matching page. Session counts cover the 90-day visibility window.
+Open the configured app URL for the five most recently synchronized sessions and direct access to active projects. **Projects** (`/projects`) lists all accessible projects, including empty ones, with session/member counts and latest synchronization. Open `/projects/<slug>` for that project’s sessions, ordered by synchronization time, with search and pagination. **All sessions** (`/sessions`) searches titles and summaries across accessible projects; the header search box goes there too. Old `/?project=…` and list-filter links redirect to the matching page. Session counts cover the 90-day visibility window.
 
 Open `/s/<id>` to read the full conversation; the header returns to the project or filtered list you came from. Tools remain collapsed and token usage is deduplicated by `message.id`. **Members** shows project membership read-only; owners manage it in `/projects/<slug>/settings`. **Details → Change project** performs an explicit move under the rights above.
 
-The **Reprendre** button copies `/share-session pull <id>` for use in Claude Code or Codex; the skill passes the current harness explicitly. The pull command is delivered by T05; the reader only copies the instruction.
+The **Resume** button copies `/share-session pull <id>` for use in Claude Code or Codex; the skill passes the current harness explicitly. The pull command is delivered by T05; the reader only copies the instruction.
 
 ## Errors
 
