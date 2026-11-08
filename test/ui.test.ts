@@ -52,6 +52,7 @@ describe("web reader", () => {
       expect(outside).not.toContain(text);
     }
     expect(inside[0]!.match(/JSON brut/g)).toHaveLength(6);
+    expect(html).toMatch(/<details class="tool prose"><summary><span class="ticon">.*?<\/span><span class="tverb">Réflexion<\/span><span class="targ">Private reasoning<\/span>/);
     for (const text of ["Human question", "Final answer"]) {
       expect(inside[0]).not.toContain(text);
       expect(outside).toContain(text);

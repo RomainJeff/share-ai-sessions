@@ -252,7 +252,7 @@ details:is(.reason,.worked)>summary:hover{background:hsl(var(--accent));color:hs
 details:is(.reason,.worked)>summary::-webkit-details-marker{display:none}
 details:is(.reason,.worked)>summary>svg{width:14px;height:14px;transition:transform .2s;rotate:-90deg}
 details:is(.reason,.worked)[open]>summary>svg{transform:rotate(90deg)}
-details.reason .rtxt{border-left:2px solid hsl(var(--border));padding:4px 0 4px 14px;color:hsl(var(--muted-foreground));white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px;line-height:1.6}
+.rtxt{color:hsl(var(--muted-foreground))}.rtxt .md{font-size:13.5px;line-height:1.6}.rtxt .md>:last-child{margin-bottom:0}
 .pill{display:inline-flex;align-items:center;font-size:12px;font-weight:500;line-height:20px;padding:0 8px;border-radius:999px;background:hsl(var(--muted));color:hsl(var(--muted-foreground))}
 .pill.bad{background:hsl(var(--destructive) / .1);color:hsl(var(--destructive-text))}
 
@@ -271,6 +271,7 @@ details.tool>summary::-webkit-details-marker{display:none}
 details.tool.err>summary .ticon{border-color:hsl(var(--destructive-text) / .35);color:hsl(var(--destructive-text));background:hsl(var(--destructive) / .08)}
 .tverb{font-weight:500;flex:none}
 .targ{font:12.5px var(--f-mono);color:hsl(var(--muted-foreground));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.tool.prose .targ{font:13px var(--f-sans)}
 .tmeta{font-size:12px;color:hsl(var(--muted-foreground));flex:none;font-variant-numeric:tabular-nums}
 .tmeta .bad{color:hsl(var(--destructive-text));font-weight:500}
 .add{color:hsl(var(--c-add))}.del{color:hsl(var(--c-del))}
@@ -684,6 +685,7 @@ const icons = {
   layers: '<path d="M12 2L2 7l10 5 10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>',
   bot: '<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 4v4M9 13v1M15 13v1"/>',
   list: '<path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>',
+  think: '<path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0012 3z"/>',
   plug: '<path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 01-12 0zM12 18v4"/>',
 } as const;
 export type IconName = keyof typeof icons;

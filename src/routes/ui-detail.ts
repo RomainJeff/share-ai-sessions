@@ -62,7 +62,7 @@ const editRows = (edits: Block[]) => edits.flatMap((edit, i) => [
   ...String(edit.new_string ?? "").split("\n").filter((l, j, all) => l || all.length > 1).map((l) => `+${l}`),
 ]);
 
-type ToolView = { icon: IconName; verb: string; arg?: string; meta?: string; body: string; read?: "file" | "search"; edit?: boolean };
+type ToolView = { icon: IconName; verb: string; arg?: string; meta?: string; body: string; read?: "file" | "search"; edit?: boolean; prose?: boolean };
 
 /** One line per tool: verb, key argument, short outcome; details below. */
 function toolView(name: string, input: any, result: Block | undefined): ToolView {
@@ -112,7 +112,7 @@ function toolView(name: string, input: any, result: Block | undefined): ToolView
 }
 
 function toolRow(view: ToolView, err: boolean, raws: string[]): string {
-  return `<details class="tool${err ? " err" : ""}"${err ? " open" : ""}><summary><span class="ticon">${icon(view.icon)}</span><span class="tverb">${e(view.verb)}</span>${view.arg ? `<span class="targ">${e(view.arg)}</span>` : '<span class="targ"></span>'}${view.meta ? `<span class="tmeta">${view.meta}</span>` : ""}<span class="tchev">${icon("chev")}</span></summary><div class="tbody">${view.body}${raw(raws)}</div></details>`;
+  return `<details class="tool${view.prose ? " prose" : ""}${err ? " err" : ""}"${err ? " open" : ""}><summary><span class="ticon">${icon(view.icon)}</span><span class="tverb">${e(view.verb)}</span>${view.arg ? `<span class="targ">${e(view.arg)}</span>` : '<span class="targ"></span>'}${view.meta ? `<span class="tmeta">${view.meta}</span>` : ""}<span class="tchev">${icon("chev")}</span></summary><div class="tbody">${view.body}${raws.length ? raw(raws) : ""}</div></details>`;
 }
 
 type Item = { html: string; read?: "file" | "search" };
@@ -136,7 +136,8 @@ function recordItems({ raw: line, data }: TranscriptRecord, results: Results, ca
       if (calls.has(String(block.tool_use_id))) continue;
       items.push({ html: toolRow({ icon: "term", verb: "Résultat", arg: String(block.tool_use_id ?? ""), body: code(textOf(block.content)) }, block.is_error === true, takeRaw()) });
     } else if (block.type === "thinking") {
-      if (String(block.thinking ?? "").trim()) items.push({ html: `<details class="reason think"><summary>${icon("chev")}Réflexion</summary><div class="rtxt">${e(block.thinking)}</div></details>` });
+      const thought = String(block.thinking ?? "").trim();
+      if (thought) items.push({ html: toolRow({ icon: "think", verb: "Réflexion", prose: true, arg: thought.split("\n")[0]!.replace(/[#*_`>]/g, "").trim(), body: `<div class="rtxt">${markdownHtml(thought)}</div>` }, false, takeRaw()) });
     } else if (block.type === "redacted_thinking") {
       continue;
     } else if (block.type === "image") {
