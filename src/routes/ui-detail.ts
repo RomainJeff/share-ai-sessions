@@ -2,11 +2,22 @@ import { readerLine } from "../../skills/share-session/scripts/transcript";
 import type { Identity } from "../auth";
 import { canManageSession, MEMBER, roleIn, VISIBLE, visibleSince } from "../db";
 import { getProjectSummaries } from "../navigation";
-import { appName, author, dateLabel, escapeHtml as e, icon, page, statusIcon } from "../ui";
+import { markdownHtml } from "../markdown";
+import { appName, author, dateLabel, escapeHtml as e, icon, type IconName, page, statusIcon } from "../ui";
 
 type RecordLine = { type?: string; timestamp?: string; isMeta?: boolean; isCompactSummary?: boolean; toolUseResult?: unknown; message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, number> } };
 
 type TranscriptRecord = { raw: string; data: RecordLine };
+
+type Block = Record<string, any>;
+
+const PROMPT_WRAPPERS = /<(command-[\w-]+|local-command-[\w-]+|system-reminder)\b[^>]*>[\s\S]*?<\/\1>/g;
+
+/** Human text of a prompt, without harness wrappers. */
+function promptText(value: unknown): string {
+  const text = typeof value === "string" ? value : Array.isArray(value) ? value.filter((b) => b?.type === "text").map((b) => b.text).join("\n") : "";
+  return text.replace(PROMPT_WRAPPERS, "").replace(/^(?:\s*\[Request interrupted[^\]\r\n]*\])+\s*/, "").trim();
+}
 
 /** Claude Code also uses user records for tool results and injected context. */
 function isHumanPrompt(data: RecordLine): boolean {
@@ -14,46 +25,149 @@ function isHumanPrompt(data: RecordLine): boolean {
   const value = data.message?.content;
   if (typeof value !== "string" && (!Array.isArray(value) || !value.every((b) =>
     b?.type === "image" || (b?.type === "text" && typeof b.text === "string")))) return false;
-  const text = typeof value === "string" ? value : value.filter((b) => b.type === "text").map((b) => b.text).join("\n");
   // Keep human text alongside wrappers; wrapper-only records belong to context.
-  const prompt = text.replace(/<(command-[\w-]+|local-command-[\w-]+|system-reminder)\b[^>]*>[\s\S]*?<\/\1>/g, "")
-    .replace(/^(?:\s*\[Request interrupted[^\]\r\n]*\])+\s*/, "").trim();
-  return (Array.isArray(value) && value.some((b) => b.type === "image")) ||
-    prompt.length > 0;
+  return (Array.isArray(value) && value.some((b) => b.type === "image")) || promptText(value).length > 0;
 }
 
-function tool(label: string, body: string): string {
-  return `<details class="tool"><summary><span class="ticon">${icon("term")}</span><span class="tlabel"><b>${e(label)}</b></span><span class="tchev">${icon("chev")}</span></summary><div class="tbody">${body}</div></details>`;
-}
+const blocks = (value: unknown): Block[] => typeof value === "string" ? [{ type: "text", text: value }]
+  : Array.isArray(value) ? value.filter((b) => b && typeof b === "object") : [{ type: "text", text: JSON.stringify(value ?? "") }];
+const textOf = (value: unknown): string => typeof value === "string" ? value
+  : Array.isArray(value) ? value.map((b) => typeof b === "string" ? b : b?.type === "text" ? String(b.text ?? "") : b?.type === "image" ? "[image]" : JSON.stringify(b)).join("\n")
+  : value == null ? "" : JSON.stringify(value, null, 2);
+const lines = (text: string) => text ? text.replace(/\n$/, "").split("\n").length : 0;
+const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
+const raw = (records: string[]) => `<details class="reason raw"><summary>${icon("chev")}JSON brut</summary><pre class="code">${records.map(e).join("\n")}</pre></details>`;
 
-function content(value: unknown, technical = false): string {
-  const text = (value: unknown) => `<pre class="${technical ? "code" : "bubble"}">${e(value)}</pre>`;
-  if (typeof value === "string") return text(value);
-  if (!Array.isArray(value)) return text(JSON.stringify(value ?? ""));
-  return value.map((block) => {
-    if (block?.type === "text") return text(block.text);
-    if (block?.type === "tool_use") return tool(`Outil : ${block.name ?? ""}`, `<h4>Entrée</h4><pre class="code">${e(JSON.stringify(block.input, null, 2))}</pre>`);
-    if (block?.type === "tool_result") return tool(`Résultat : ${block.tool_use_id ?? ""}`, content(block.content, true));
-    if (block?.type === "thinking") return `<details class="reason"><summary>${icon("chev")}Raisonnement</summary><pre class="rtxt">${e(block.thinking)}</pre></details>`;
-    return tool(String(block?.type || "Bloc"), `<pre class="code">${e(JSON.stringify(block, null, 2))}</pre>`);
+/** Long outputs keep their head and tail; the full text stays in the raw JSON. */
+function clip(text: string, keep = 20): string {
+  const all = text.replace(/\n$/, "").split("\n");
+  if (all.length <= keep * 2 + 4) return e(all.join("\n"));
+  return `${e(all.slice(0, keep).join("\n"))}\n<span class="cut">… ${all.length - keep * 2} lignes masquées …</span>\n${e(all.slice(-keep).join("\n"))}`;
+}
+const code = (text: string) => `<pre class="code">${clip(text)}</pre>`;
+const firstString = (input: unknown) => input && typeof input === "object" ? Object.values(input).find((v) => typeof v === "string" && v.length < 300) as string | undefined : typeof input === "string" ? input.split("\n")[0] : undefined;
+
+/** Unified diff from Edit/MultiEdit/apply_patch inputs. */
+function diffHtml(rows: string[]): { html: string; add: number; del: number } {
+  let add = 0, del = 0;
+  const html = rows.map((line) => {
+    const kind = line.startsWith("+") && !line.startsWith("+++") ? (add++, "da") : line.startsWith("-") && !line.startsWith("---") ? (del++, "dd") : /^(@@|\*\*\*)/.test(line) ? "dh" : "";
+    return `<span class="${kind || "dc"}">${e(line) || " "}</span>`;
   }).join("");
+  return { html: `<pre class="diff">${html}</pre>`, add, del };
+}
+const editRows = (edits: Block[]) => edits.flatMap((edit, i) => [
+  ...(i ? ["@@"] : []),
+  ...String(edit.old_string ?? "").split("\n").filter((l, j, all) => l || all.length > 1).map((l) => `-${l}`),
+  ...String(edit.new_string ?? "").split("\n").filter((l, j, all) => l || all.length > 1).map((l) => `+${l}`),
+]);
+
+type ToolView = { icon: IconName; verb: string; arg?: string; meta?: string; body: string; read?: "file" | "search"; edit?: boolean };
+
+/** One line per tool: verb, key argument, short outcome; details below. */
+function toolView(name: string, input: any, result: Block | undefined): ToolView {
+  let out = result ? textOf(result.content) : "";
+  const err = result?.is_error === true;
+  const outBody = result ? code(out) : "";
+  const count = (n: number, word: string) => result && !err ? plural(n, word) : undefined;
+  const inp = input && typeof input === "object" ? input : {};
+  if (["Bash", "exec_command", "shell", "local_shell", "shell_command"].includes(name)) {
+    const cmd = typeof inp.command === "string" ? inp.command : Array.isArray(inp.command) ? String(inp.command.at(-1)) : typeof inp.cmd === "string" ? inp.cmd : Array.isArray(inp.cmd) ? inp.cmd.join(" ") : JSON.stringify(input);
+    let exit: string | undefined;
+    try { const parsed = JSON.parse(out); if (typeof parsed?.output === "string") { out = parsed.output; exit = parsed.metadata?.exit_code?.toString(); } } catch { /* plain text output */ }
+    exit ??= out.match(/(?:exit code|exited with code)[:\s]+(-?\d+)/i)?.[1];
+    const failed = err || (exit !== undefined && exit !== "0");
+    return { icon: "term", verb: "Bash", arg: cmd.split("\n")[0], meta: exit !== undefined ? `<span class="${failed ? "bad" : ""}">exit ${e(exit)}</span>` : err ? '<span class="bad">erreur</span>' : undefined,
+      body: `<pre class="term"><span class="t-dim">$ </span>${e(cmd)}${out ? `\n${clip(out)}` : ""}</pre>` };
+  }
+  if (name === "Read") return { icon: "file", verb: "Lecture", arg: inp.file_path, meta: count(lines(out), "ligne"), body: outBody, read: "file" };
+  if (name === "Edit" || name === "MultiEdit") {
+    const d = diffHtml(editRows(name === "Edit" ? [inp] : Array.isArray(inp.edits) ? inp.edits : []));
+    return { icon: "pen", verb: "Modification", arg: inp.file_path, meta: `<span class="add">+${d.add}</span> <span class="del">−${d.del}</span>`, body: d.html + (err ? outBody : ""), edit: true };
+  }
+  if (name === "Write") {
+    const text = String(inp.content ?? "");
+    return { icon: "pen", verb: "Écriture", arg: inp.file_path, meta: `<span class="add">+${lines(text)}</span>`, body: code(text) + (err ? outBody : ""), edit: true };
+  }
+  if (name === "apply_patch") {
+    const patch = typeof input === "string" ? input : String(inp.input ?? inp.patch ?? "");
+    const d = diffHtml(patch.split("\n"));
+    return { icon: "pen", verb: "Patch", arg: patch.match(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/m)?.[1], meta: `<span class="add">+${d.add}</span> <span class="del">−${d.del}</span>`, body: d.html + (err ? outBody : ""), edit: true };
+  }
+  if (name === "Grep") return { icon: "search", verb: "Recherche", arg: `"${inp.pattern ?? ""}"${inp.path ? ` dans ${inp.path}` : ""}`, meta: count(lines(out), "résultat"), body: outBody, read: "search" };
+  if (name === "Glob") return { icon: "search", verb: "Fichiers", arg: inp.pattern, meta: count(lines(out), "résultat"), body: outBody, read: "search" };
+  if (name === "WebFetch") return { icon: "globe", verb: "Page web", arg: inp.url, body: outBody, read: "file" };
+  if (name === "WebSearch" || name === "web_search") return { icon: "globe", verb: "Recherche web", arg: inp.query, body: outBody, read: "search" };
+  if (name === "Task" || name === "Agent") return { icon: "bot", verb: "Agent", arg: inp.description || inp.subagent_type,
+    body: `<h4>Consigne</h4>${markdownHtml(String(inp.prompt ?? ""))}${result ? `<h4>Résultat</h4>${markdownHtml(out)}` : ""}` };
+  if (name === "TodoWrite" || name === "update_plan") {
+    const todos: Block[] = Array.isArray(inp.todos) ? inp.todos : Array.isArray(inp.plan) ? inp.plan : [];
+    const done = todos.filter((t) => t.status === "completed").length;
+    return { icon: "list", verb: "Tâches", arg: `${done}/${todos.length} terminées`,
+      body: `<ul class="todo">${todos.map((t) => `<li class="${e(t.status)}"><span class="box" aria-hidden="true"></span>${e(t.content ?? t.step ?? "")}</li>`).join("")}</ul>` };
+  }
+  const mcp = name.match(/^mcp__(.+?)__(.+)$/);
+  return { icon: mcp ? "plug" : "term", verb: mcp ? `${mcp[1]} › ${mcp[2]}` : name || "Outil", arg: firstString(input),
+    body: `<h4>Entrée</h4><pre class="code">${e(typeof input === "string" ? input : JSON.stringify(input, null, 2))}</pre>${result ? `<h4>Résultat</h4>${outBody}` : ""}` };
 }
 
-function renderRow({ raw, data }: TranscriptRecord, harness = "Claude"): string {
-  const value = data.message?.content;
-  const hasToolResult = Array.isArray(value) && value.some((b) => b?.type === "tool_result");
-  const role = isHumanPrompt(data) ? "user" : data.type === "assistant" ? "assistant" :
-    hasToolResult || "toolUseResult" in data ? "tool" : "system";
-  const rawHtml = `<details class="reason raw"><summary>${icon("chev")}JSON brut</summary><pre class="code">${e(raw)}</pre></details>`;
+function toolRow(view: ToolView, err: boolean, raws: string[]): string {
+  return `<details class="tool${err ? " err" : ""}"${err ? " open" : ""}><summary><span class="ticon">${icon(view.icon)}</span><span class="tverb">${e(view.verb)}</span>${view.arg ? `<span class="targ">${e(view.arg)}</span>` : '<span class="targ"></span>'}${view.meta ? `<span class="tmeta">${view.meta}</span>` : ""}<span class="tchev">${icon("chev")}</span></summary><div class="tbody">${view.body}${raw(raws)}</div></details>`;
+}
+
+type Item = { html: string; read?: "file" | "search" };
+type Results = Map<string, { block: Block; raw: string }>;
+type Stats = { tools: number; edits: number; errors: number };
+
+/** Blocks of one record. Tool results render under their call; orphan results stay visible. */
+function recordItems({ raw: line, data }: TranscriptRecord, results: Results, calls: Set<string>, stats: Stats, answer = false): Item[] {
+  const items: Item[] = [];
   const time = data.timestamp ? dateLabel(data.timestamp) : "";
-  if (role === "system") return `<article class="turn system" data-role="system"><div class="col">
-    <details class="reason context"><summary>${icon("chev")}Contexte ${time}</summary>
-      ${content(value)}${rawHtml}</details></div></article>`;
-  return `<article class="turn ${role === "user" ? "me" : "ai"}" data-role="${role}">
-    <span class="avatar lg${role === "user" ? "" : " av-ai"}" aria-hidden="true">${role === "user" ? "U" : "C"}</span>
-    <div class="col"><div class="meta-l"><b>${role === "user" ? "Utilisateur" : harness}</b>${time}</div>
-      ${role === "tool" && !hasToolResult ? tool("Résultat", content(value, true)) : content(value)}${rawHtml}
-    </div></article>`;
+  let rawPending = true;
+  const takeRaw = () => rawPending ? (rawPending = false, [line]) : [];
+  for (const block of blocks(data.message?.content)) {
+    if (block.type === "tool_use") {
+      const paired = results.get(String(block.id));
+      const err = paired?.block.is_error === true;
+      const view = toolView(String(block.name ?? ""), block.input, paired?.block);
+      stats.tools++; if (view.edit) stats.edits++; if (err) stats.errors++;
+      items.push({ html: toolRow(view, err, [...takeRaw(), ...(paired ? [paired.raw] : [])]), read: err ? undefined : view.read });
+    } else if (block.type === "tool_result") {
+      if (calls.has(String(block.tool_use_id))) continue;
+      items.push({ html: toolRow({ icon: "term", verb: "Résultat", arg: String(block.tool_use_id ?? ""), body: code(textOf(block.content)) }, block.is_error === true, takeRaw()) });
+    } else if (block.type === "thinking") {
+      if (String(block.thinking ?? "").trim()) items.push({ html: `<details class="reason think"><summary>${icon("chev")}Réflexion</summary><div class="rtxt">${e(block.thinking)}</div></details>` });
+    } else if (block.type === "redacted_thinking") {
+      continue;
+    } else if (block.type === "image") {
+      items.push({ html: '<span class="md-img">Image jointe</span>' });
+    } else if (block.type === "text" && data.type === "assistant") {
+      items.push({ html: answer ? markdownHtml(String(block.text ?? "")) : `<div class="say">${markdownHtml(String(block.text ?? ""))}</div>` });
+    } else if (block.type === "text") {
+      items.push({ html: `<details class="reason context"><summary>${icon("chev")}Contexte ${time}</summary><pre class="code">${clip(String(block.text ?? ""))}</pre>${raw(takeRaw())}</details>` });
+    } else {
+      items.push({ html: toolRow({ icon: "term", verb: String(block.type || "Bloc"), body: `<pre class="code">${e(JSON.stringify(block, null, 2))}</pre>` }, false, takeRaw()) });
+    }
+  }
+  if (rawPending && !answer) items.push({ html: raw([line]) });
+  return items;
+}
+
+/** Consecutive read-only tools fold into one "Exploré" line; errors, edits and commands never do. */
+function grouped(items: Item[]): string {
+  let html = "";
+  for (let i = 0; i < items.length;) {
+    let j = i;
+    while (j < items.length && items[j]!.read) j++;
+    if (j - i >= 2) {
+      const run = items.slice(i, j);
+      const files = run.filter((x) => x.read === "file").length, searches = run.length - files;
+      const label = [files && plural(files, "fichier"), searches && plural(searches, "recherche")].filter(Boolean).join(", ");
+      html += `<details class="tool tgroup"><summary><span class="ticon">${icon("layers")}</span><span class="tverb">Exploré</span><span class="targ">${label}</span><span class="tchev">${icon("chev")}</span></summary><div class="tlist">${run.map((x) => x.html).join("")}</div></details>`;
+      i = j;
+    } else html += items[i++]!.html;
+  }
+  return html;
 }
 
 /** Reader rendering of a hosted transcript, or null when a segment is missing. */
@@ -94,7 +208,14 @@ async function readConversation(env: Env, id: string) {
   }
   const tokens = [...usages.values()].reduce((total, usage) => total +
     ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"].reduce((sum, k) => sum + (Number(usage[k]) || 0), 0), 0);
-  let conversation = "";
+  // Pair every tool_result with its call, wherever the result record lands.
+  const calls = new Set<string>(), results: Results = new Map();
+  for (const { raw, data } of records) for (const block of blocks(data.message?.content)) {
+    if (block.type === "tool_use") calls.add(String(block.id));
+    if (block.type === "tool_result") results.set(String(block.tool_use_id), { block, raw });
+  }
+  const total: Stats = { tools: 0, edits: 0, errors: 0 };
+  let conversation = "", turns = 0;
   for (let start = 0, end = 0; start < records.length; start = end) {
     end = start + 1;
     while (end < records.length && !isHumanPrompt(records[end]!.data)) end++;
@@ -106,18 +227,37 @@ async function readConversation(env: Env, id: string) {
       if (data.type === "assistant" && (typeof value === "string" ? value.trim() :
         Array.isArray(value) && value.some((b) => b?.type === "text" && typeof b.text === "string" && b.text.trim()))) final = i;
     }
-    if (prompt) conversation += renderRow(prompt, harness);
+    let html = "";
+    if (prompt) {
+      turns++;
+      const value = prompt.data.message?.content;
+      const images = Array.isArray(value) ? value.filter((b) => b?.type === "image").length : 0;
+      html += `<article class="turn me" data-role="user"><span class="avatar lg" aria-hidden="true">U</span><div class="col">
+        <div class="meta-l"><b>Utilisateur</b><a href="#t${turns}">Tour ${turns}</a>${prompt.data.timestamp ? dateLabel(prompt.data.timestamp) : ""}</div>
+        <div class="bubble">${markdownHtml(promptText(value))}${images ? `<span class="md-img">${plural(images, "image jointe")}</span>` : ""}</div>${raw([prompt.raw])}</div></article>`;
+    }
     const steps = records.slice(start, end).filter((_, i) => start + i !== final && !(prompt && i === 0));
     if (steps.length) {
+      const stats: Stats = { tools: 0, edits: 0, errors: 0 };
+      const body = grouped(steps.flatMap((r) => recordItems(r, results, calls, stats)));
+      total.tools += stats.tools; total.edits += stats.edits; total.errors += stats.errors;
       const elapsed = Date.parse(records[end - 1]!.data.timestamp || "") - Date.parse(prompt?.data.timestamp || "");
       const minutes = Math.floor(elapsed / 60000);
       const duration = minutes < 1 ? "moins d'une minute" : minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
       const label = Number.isFinite(elapsed) && elapsed >= 0 ? `A travaillé pendant ${duration}` : "Étapes intermédiaires";
-      conversation += `<details class="worked"><summary>${icon("chev")}<span>${e(label)} · ${steps.length} étape${steps.length === 1 ? "" : "s"}</span></summary><div>${steps.map(r => renderRow(r, harness)).join("")}</div></details>`;
+      const pills = [stats.tools ? plural(stats.tools, "outil") : plural(steps.length, "étape"), stats.edits && plural(stats.edits, "modif")]
+        .filter(Boolean).map((p) => `<span class="pill">${p}</span>`).join("") + (stats.errors ? `<span class="pill bad">${plural(stats.errors, "erreur")}</span>` : "");
+      html += `<details class="worked"><summary>${icon("chev")}<span>${e(label)}</span>${pills}</summary><div>${body}</div></details>`;
     }
-    if (final >= 0) conversation += renderRow(records[final]!, harness);
+    if (final >= 0) {
+      const answer = records[final]!;
+      html += `<article class="turn ai" data-role="assistant"><span class="avatar lg av-ai" aria-hidden="true">C</span><div class="col">
+        <div class="meta-l"><b>${harness}</b>${answer.data.timestamp ? dateLabel(answer.data.timestamp) : ""}</div>
+        <div class="answer">${grouped(recordItems(answer, results, calls, total, true))}</div>${raw([answer.raw])}</div></article>`;
+    }
+    conversation += prompt ? `<section class="tturn" id="t${turns}" aria-label="Tour ${turns}">${html}</section>` : html;
   }
-  return { harness, records, invalid, usages, tokens, conversation };
+  return { harness, records, invalid, usages, tokens, conversation, turns, ...total };
 }
 
 /** GET /s/:id — metadata is retention-checked before reading any transcript from R2. */
@@ -147,10 +287,10 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
 
   // A relay without a transcript has nothing in R2; one with a transcript reads like a hosted session.
   const hosted = Number(session.segment_count) > 0;
-  const transcript = !hosted ? { harness: "Claude", records: [] as TranscriptRecord[], invalid: 0, usages: new Map<string, Record<string, number>>(), tokens: 0, conversation: "" }
+  const transcript = !hosted ? { harness: "Claude", records: [] as TranscriptRecord[], invalid: 0, usages: new Map<string, Record<string, number>>(), tokens: 0, conversation: "", turns: 0, tools: 0, edits: 0, errors: 0 }
     : await readConversation(env, id);
   if (!transcript) return page("Transcript indisponible", "<h1>Transcript indisponible</h1>", 503);
-  const { harness, records, invalid, usages, tokens, conversation } = transcript;
+  const { harness, records, invalid, usages, tokens, conversation, turns, tools } = transcript;
   const canManage = canManageSession(await roleIn(env, String(session.project), who.email), String(session.owner_email), who.email);
   const destinations = canManage ? (await env.DB.prepare(`SELECT p.slug, p.name FROM projects p
     JOIN project_members m ON m.project = p.slug WHERE m.email = lower(?) AND m.role IN ('owner', 'writer') AND p.slug != ? ORDER BY p.name`)
@@ -182,7 +322,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
   const meta = (label: string, value: unknown, mono = false) => value == null || value === "" ? "" : `<dt>${label}</dt><dd${mono ? ' class="mono"' : ""}>${e(value)}</dd>`;
   return page(String(session.title || id), `<div class="detail">
     <header class="dhead${done ? " is-done" : ""}">${statusPill}<h1>${e(session.title || id)}</h1>
-      <details class="hmeta" data-meta open><summary>${icon("chev")}Détails${hosted ? ` · ${tokens} tokens · ${records.length} messages` : ""}</summary>
+      <details class="hmeta" data-meta open><summary>${icon("chev")}Détails${hosted ? ` · ${tokens} tokens · ${records.length} messages · ${plural(turns, "tour")} · ${plural(tools, "outil")}` : ""}</summary>
       ${session.summary ? `<p class="sum">${e(session.summary)}</p>` : ""}
       <div class="line">${author(session.owner_name, session.owner_email)}
         ${app ? `<span class="badge">${e(app)}</span>` : ""}
@@ -195,7 +335,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
         ${continuation ? `<span class="badge">${icon("branch")}suite dans <a href="/s/${e(encodeURIComponent(String(continuation.id)))}">${e(continuation.id)}</a></span>` : ""}
         ${session.forked_from ? `<span class="badge">${icon("branch")}forké depuis <a href="/s/${e(encodeURIComponent(String(session.forked_from)))}">${e(session.forked_from)}</a> · ${e(session.forked_from_owner)}</span>` : ""}
       </div>
-      ${hosted ? `<p class="hint">${tokens} tokens · ${records.length} messages</p>` : ""}</details>
+      ${hosted ? `<p class="hint">${tokens} tokens · ${records.length} messages · ${plural(turns, "tour")} · ${plural(tools, "outil")}</p>` : ""}</details>
       ${session.owner_email !== who.email && hosted ? `<p class="ro-note">Lecture seule : session de ${e(session.owner_email)}. Si vous la reprenez, la copie sera à votre nom.</p>` : ""}
       ${canManage ? '<p class="ro-note" role="alert" data-status-error hidden></p>' : ""}
       <div class="actionbar gutter"><div class="in">${action}</div></div>
@@ -218,7 +358,9 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
       </div></details>`}
       ${movePanel}
     </aside>
-    ${!hosted ? "" : `<section class="chat transcript" id="conversation" tabindex="0" aria-label="Conversation"><h2 class="chat-title">Conversation</h2>
+    ${!hosted ? "" : `<section class="chat transcript" id="conversation" tabindex="0" aria-label="Conversation"><div class="chat-head"><h2 class="chat-title">Conversation</h2>
+      ${turns > 1 ? `<div class="turnnav" data-turns hidden><button type="button" data-turn="-1" aria-label="Tour précédent">${icon("chev")}</button><span data-turn-label>Tour ${turns}/${turns}</span><button type="button" data-turn="1" aria-label="Tour suivant">${icon("chev")}</button></div>` : ""}
+      <div class="levels" role="group" aria-label="Niveau de détail" data-levels hidden><button type="button" data-level="conv">Conversation</button><button type="button" data-level="normal">Normal</button><button type="button" data-level="full">Détaillé</button></div></div>
       ${invalid ? `<p class="ro-note">${invalid} ligne(s) JSONL invalide(s) ignorée(s).</p>` : ""}
       ${conversation || '<p class="empty">Aucun message.</p>'}
     </section>`}</div>`, 200, true, {

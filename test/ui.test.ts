@@ -46,8 +46,8 @@ describe("web reader", () => {
     const { inside, outside } = await workedParts(html);
     expect(html.match(/<details class="worked"[^>]*>/g)).toEqual(['<details class="worked">']);
     expect(inside).toHaveLength(1);
-    expect(inside[0]).toContain("A travaillé pendant 12 min · 6 étapes");
-    for (const text of ["Private reasoning", "Outil : Read", "Read output", "Injected context", "Progress update", "Trailing context"]) {
+    expect(inside[0]).toContain("A travaillé pendant 12 min1 outil");
+    for (const text of ["Private reasoning", "Lecture", "Read output", "Injected context", "Progress update", "Trailing context"]) {
       expect(inside[0]).toContain(text);
       expect(outside).not.toContain(text);
     }
@@ -71,10 +71,10 @@ describe("web reader", () => {
     ]);
     const { inside, outside } = await workedParts(await (await get(`/s/${id}`)).text());
     expect(inside).toHaveLength(2);
-    expect(inside[0]).toContain("Étapes intermédiaires · 2 étapes");
+    expect(inside[0]).toContain("Étapes intermédiaires2 étapes");
     expect(inside[0]).toContain("Session preamble");
     expect(inside[0]).toContain("Preamble text");
-    expect(inside[1]).toMatch(/A travaillé pendant moins d(?:'|&#39;)une minute · 1 étape/);
+    expect(inside[1]).toMatch(/A travaillé pendant moins d(?:'|&#39;)une minute1 outil/);
     expect(inside[1]).toContain("Unfinished work");
     expect(inside[1]).toContain("PendingTool");
     expect(outside).not.toContain("Unfinished work");
@@ -101,7 +101,7 @@ describe("web reader", () => {
     ]);
     const { inside } = await workedParts(await (await get(`/s/${id}`)).text());
     expect(inside).toHaveLength(1);
-    expect(inside[0]).toContain(`${label} · 1 étape`);
+    expect(inside[0]).toContain(`${label}1 étape`);
   });
 
   it("renders a turn longer than 100 rows in full without pagination", async () => {
@@ -114,12 +114,12 @@ describe("web reader", () => {
       const html = await (await get(`/s/${id}${query}`)).text();
       const { inside, outside } = await workedParts(html);
       expect(inside).toHaveLength(1);
-      expect(inside[0]).toContain("A travaillé pendant 12 min · 100 étapes");
+      expect(inside[0]).toContain("A travaillé pendant 12 min100 étapes");
       for (let n = 0; n < 100; n++) expect(inside[0]).toContain(`Progress ${n}`);
       expect(outside).not.toContain("Progress ");
       expect(outside).toContain("Long question");
       expect(outside).toContain("Long final");
-      expect(html.match(/<article /g)).toHaveLength(102);
+      expect(html.match(/<article /g)).toHaveLength(2);
       expect(html).not.toContain("?page=");
       expect(html).not.toContain('<nav class="pagination"');
     }
@@ -192,11 +192,12 @@ describe("web reader", () => {
     const text = html.match(/<main[^>]*>([^]*?)<\/main>/)![1]!.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
     expect(html).toContain("Alice · alice@example.com");
     expect(text).toContain("acme/repo main claude-test");
-    expect(html).toContain("37 tokens · 101 messages");
+    expect(html).toContain("37 tokens · 101 messages · 98 tours · 1 outil");
     expect(html).toContain("<dt>Réponses API</dt><dd>1</dd>");
-    expect(html.match(/<article /g)).toHaveLength(101);
-    expect(html).toMatch(/<details class="tool"><summary>[^]*?Outil : Read[^]*?<\/summary>/);
-    expect(html).toMatch(/<details class="tool"><summary>[^]*?Résultat : read-id[^]*?<\/summary>/);
+    expect(html.match(/<article /g)).toHaveLength(98);
+    expect(html.match(/<section class="tturn" id="t\d+"/g)).toHaveLength(98);
+    expect(html).toMatch(/<details class="tool"><summary>[^]*?Lecture[^]*?<\/summary>/);
+    expect(html).toContain('<span class="tverb">Résultat</span><span class="targ">read-id</span>');
     expect(html).toContain("Result body");
     expect(html).toContain(`data-copy="/share-session pull ${id}"`);
     expect(html).toContain("Prompt 97");
@@ -212,27 +213,19 @@ describe("web reader", () => {
     const id = await seed("Attribution", records);
     const html = await (await get(`/s/${id}`)).text();
     const rows = html.match(/<article\b[^]*?<\/article>/g)!;
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(1);
     expect(html.match(/data-role="user"/g)).toHaveLength(1);
     expect(html.match(/<b>Utilisateur<\/b>/g)).toHaveLength(1);
     expect(rows[0]).toContain('class="turn me" data-role="user"');
     expect(rows[0]).toContain('aria-hidden="true">U</span>');
     expect(rows[0]).toContain("Explain this change");
-    expect(rows[1]).toContain('class="turn ai" data-role="tool"');
-    expect(rows[1]).toMatch(/<details class="tool"><summary>[^]*?Résultat : read-id/);
-    for (const row of rows.slice(1)) {
-      expect(row).not.toContain("Utilisateur");
-      expect(row).not.toContain('aria-hidden="true">U</span>');
-      expect(row).not.toContain('class="turn me"');
-    }
-    for (const row of rows.slice(2)) {
-      expect(row).toContain('data-role="system"');
-      expect(row).toMatch(/<details class="reason context"><summary>[^]*?Contexte/);
-      expect(row).not.toMatch(/<details[^>]*\bopen\b/);
-    }
-    for (const [index, record] of records.entries()) {
-      expect(rows[index]).toContain("JSON brut");
-      expect(rows[index]).toContain(JSON.stringify(record).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;"));
+    const { inside } = await workedParts(html);
+    expect(inside[0]).toContain("Read output");
+    expect(html).toContain('<span class="tverb">Résultat</span><span class="targ">read-id</span>');
+    expect(html.match(/<details class="reason context"><summary>[^]*?Contexte/g)).toHaveLength(2);
+    expect(html).not.toMatch(/<details class="reason context"[^>]*\bopen\b/);
+    for (const record of records) {
+      expect(html).toContain(JSON.stringify(record).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;"));
     }
     expect(html).toContain("<dt>Messages</dt><dd>4</dd>");
   });
@@ -259,12 +252,65 @@ describe("web reader", () => {
     ];
     const id = await seed("Prompt shapes", cases.map(({ role, ...record }) => ({ type: "user", ...record })));
     const html = await (await get(`/s/${id}`)).text();
-    const rows = html.match(/<article\b[^]*?<\/article>/g)!;
-    expect(rows).toHaveLength(cases.length);
-    for (const [index, { role }] of cases.entries()) {
-      expect(rows[index]).toContain(`data-role="${role}"`);
-      expect(rows[index]?.includes("<b>Utilisateur</b>")).toBe(role === "user");
+    const prompts = html.match(/<article\b[^]*?<\/article>/g)!;
+    const users = cases.filter(({ role }) => role === "user");
+    expect(prompts).toHaveLength(users.length);
+    for (const [index, { role, ...record }] of users.entries()) {
+      expect(prompts[index]).toContain('data-role="user"');
+      expect(prompts[index]).toContain(JSON.stringify({ type: "user", ...record }).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;"));
     }
+    expect(html).toContain("My real question");
+    expect(html).not.toContain("&lt;system-reminder&gt;Injected&lt;/system-reminder&gt;\nMy real question");
+  });
+
+  it("pairs tools with results, folds reads, renders diffs, markdown and turn navigation", async () => {
+    const id = await seed("Rich turn", [
+      { type: "user", timestamp: "2026-10-17T10:00:00Z", message: { content: "First **question**" } },
+      { type: "assistant", message: { content: [
+        { type: "tool_use", id: "r1", name: "Read", input: { file_path: "src/a.ts" } },
+        { type: "tool_use", id: "g1", name: "Grep", input: { pattern: "needle", path: "src" } },
+        { type: "tool_use", id: "b1", name: "Bash", input: { command: "npm test" } },
+        { type: "tool_use", id: "e1", name: "Edit", input: { file_path: "src/a.ts", old_string: "const a = 1;", new_string: "const a = 2;\nconst b = 3;" } },
+      ] } },
+      { type: "user", message: { content: [
+        { type: "tool_result", tool_use_id: "r1", content: "line 1\nline 2" },
+        { type: "tool_result", tool_use_id: "g1", content: "src/a.ts:1" },
+        { type: "tool_result", tool_use_id: "b1", content: "boom\nExit code: 1", is_error: true },
+        { type: "tool_result", tool_use_id: "e1", content: "ok" },
+      ] } },
+      { type: "assistant", timestamp: "2026-10-17T10:05:00Z", message: { content: "Done:\n\n- [link](javascript:alert(1))\n- [safe](https://example.com)\n\n<b>raw</b> ![x](https://example.com/x.png)\n\n```ts\nconst x = 1;\n```" } },
+      { type: "user", message: { content: "Second question" } },
+      { type: "assistant", message: { content: "Second answer" } },
+    ]);
+    const html = await (await get(`/s/${id}`)).text();
+    const { inside, outside } = await workedParts(html);
+    // Results render under their call, never as separate rows.
+    expect(inside[0]).toContain("boom");
+    expect(html).not.toContain('<span class="tverb">Résultat</span>');
+    expect(html).toMatch(/<details class="tool tgroup">[^]*?Exploré[^]*?1 fichier, 1 recherche/);
+    expect(html).toContain("<span class=\"tmeta\">2 lignes</span>");
+    expect(html).toMatch(/<details class="tool err" open>[^]*?npm test[^]*?exit 1/);
+    expect(html).toContain('<span class="add">+2</span> <span class="del">−1</span>');
+    expect(html).toContain('<span class="dd">-const a = 1;</span>');
+    expect(html).toContain('<span class="pill">4 outils</span><span class="pill">1 modif</span><span class="pill bad">1 erreur</span>');
+    // Markdown: safe links only, raw HTML escaped, images as text, highlighted code.
+    expect(outside).toContain("<strong>question</strong>");
+    expect(outside).not.toMatch(/href="javascript:/i);
+    expect(outside).toContain("<li>link</li>");
+    expect(outside).toContain('href="https://example.com" rel="noopener noreferrer nofollow"');
+    expect(outside).toContain("&lt;b&gt;raw&lt;/b&gt;");
+    expect(outside).not.toContain("<img");
+    expect(outside).toContain('<span class="md-img">Image : x</span>');
+    expect(outside).toContain('<span class="hljs-keyword">const</span>');
+    expect(outside).toContain("data-copy-code");
+    // Turns are anchored; the reader opens on the last one.
+    expect(html).toContain('<section class="tturn" id="t1" aria-label="Tour 1">');
+    expect(html).toContain('<section class="tturn" id="t2" aria-label="Tour 2">');
+    expect(html).toContain("<span data-turn-label>Tour 2/2</span>");
+    expect(html).toContain("data-levels hidden");
+    const script = html.match(/<script nonce="[^"]+">([^]*?)<\/script>/)![1]!;
+    expect(script).toContain("turns.at(-1)");
+    expect(script).toContain("localStorage.getItem('ss-level')");
   });
 
   it("renders hostile transcript and metadata as text with no executable markup", async () => {
