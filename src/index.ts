@@ -57,6 +57,8 @@ const ROUTES: [method: string, pattern: URLPattern, handler: Handler][] = [
   ["GET", new URLPattern({ pathname: "/" }), landingPage],
   ["GET", new URLPattern({ pathname: "/s/:id" }), sessionDetailPage],
   ["GET", new URLPattern({ pathname: "/share-session.skill" }), skillDownload],
+  ["GET", new URLPattern({ pathname: "/manifest.webmanifest" }), (request, env) => env.ASSETS.fetch(request)],
+  ["GET", new URLPattern({ pathname: "/icons/:file" }), (request, env) => env.ASSETS.fetch(request)],
 ];
 
 export default {

@@ -868,6 +868,9 @@ export function page(title: string, body: string, status = 200, detail = false, 
   const nonce = crypto.randomUUID();
   return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>${escapeHtml(title)}</title>
+<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/icons/icon-180.png">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
 <style>${styles}</style></head>
 <body${options ? ` class="has-navigation${detail ? " is-detail" : ""}"` : detail ? ' class="is-detail"' : ""}>
 ${options ? navigationShell(body, detail, options) : `
@@ -1096,7 +1099,7 @@ if(filters&&toggle&&typeof filters.showModal==='function'){
 </script></body></html>`, { status, headers: {
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": "private, no-store",
-    "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
+    "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'self'; manifest-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
     "X-Content-Type-Options": "nosniff",
   } });
 }

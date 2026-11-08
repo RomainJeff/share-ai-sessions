@@ -336,7 +336,8 @@ describe("web reader", () => {
       expect(nonce).toBeTruthy();
       expect(response.headers.get("content-security-policy")).toContain(`script-src 'nonce-${nonce}'`);
       expect(response.headers.get("content-security-policy")).not.toContain("script-src 'unsafe-inline'");
-      expect(html).not.toMatch(/<(?:link|script)[^>]+(?:href|src)=/);
+      expect(response.headers.get("content-security-policy")).toContain("img-src 'self'");
+      expect(html.replace(/<link rel="(?:manifest|icon|apple-touch-icon)" href="\/(?:manifest\.webmanifest|icons\/[\w.-]+)"[^>]*>/g, "")).not.toMatch(/<(?:link|script)[^>]+(?:href|src)=/);
       expect(html).not.toContain(attack);
       expect(html).not.toContain("<img");
       expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
@@ -391,6 +392,15 @@ describe("web reader", () => {
     expect(new TextDecoder().decode(bytes)).toContain("share-session/SKILL.md");
     expect((await SELF.fetch(ORIGIN + "/share-session.skill")).status).toBe(401);
     expect(await (await get("/")).text()).toContain('href="/share-session.skill"');
+  });
+
+  it("serves the PWA manifest and icons behind Access and links them from every page", async () => {
+    const manifest = await (await get("/manifest.webmanifest")).json() as { icons: { src: string }[] };
+    for (const { src } of manifest.icons) expect((await get(src)).status).toBe(200);
+    expect((await SELF.fetch(ORIGIN + "/manifest.webmanifest")).status).toBe(401);
+    const html = await (await get("/")).text();
+    expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">');
+    expect(html).toContain('<link rel="apple-touch-icon" href="/icons/icon-180.png">');
   });
 });
 
