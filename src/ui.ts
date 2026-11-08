@@ -11,6 +11,8 @@ export type NavigationOptions = {
   /** In-progress sessions listed in the sidebar; omitted on pages that do not load them. */
   sidebar?: SidebarSession[];
   currentSession?: string;
+  /** Detail page: title shown in the compact mobile bar once the header scrolls away; also adds the ⋯ options button. */
+  compactTitle?: string;
 };
 
 /** All transcript and metadata values enter HTML through this text/attribute escape. */
@@ -612,6 +614,7 @@ body.has-navigation{
 .has-navigation .nav-back{display:inline-flex;align-items:center;min-height:44px;gap:5px;font-size:12px;color:var(--nav-muted);min-width:0;max-width:180px;flex:0 1 auto}
 .has-navigation .nav-back span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .has-navigation.is-detail .content{padding-bottom:48px}
+.has-navigation :is(.mtitle,.more-toggle,.tnav){display:none}
 .has-navigation .dhead h1{font-size:27px;font-weight:620;letter-spacing:-.65px}
 .has-navigation .detail .chat{border-radius:12px;box-shadow:none}
 .has-navigation .detail .side{top:95px}
@@ -694,11 +697,45 @@ body.has-navigation{
   .has-navigation .btn{min-height:44px}
   .has-navigation .footnote{font-size:10px}
   .has-navigation .nav-back{max-width:55%;font-size:12px}
-  .has-navigation.is-detail .content{padding-bottom:calc(126px + var(--mobile-nav-height))}
-  .has-navigation .actionbar{bottom:var(--mobile-nav-height);padding-bottom:12px}
+  .has-navigation.is-detail .content{padding-bottom:calc(88px + var(--mobile-nav-height))}
   .has-navigation .toast{bottom:calc(16px + var(--mobile-nav-height))}
   .has-navigation.is-detail .toast{bottom:calc(100px + var(--mobile-nav-height))}
   .has-navigation .dhead h1{font-size:24px}
+  /* Conversation: one page scroll, compact sticky bar, secondary actions in bottom sheets. */
+  .has-navigation.is-detail .topbar{min-height:52px;padding:4px;gap:0 4px;display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-content:center}
+  .has-navigation.is-detail .topbar .nav-toggle{grid-row:1/3}
+  .has-navigation.is-detail .topbar .more-toggle{display:inline-grid;width:44px;height:44px;grid-column:3;grid-row:1/3}
+  .has-navigation.is-detail .global-search{display:none}
+  .has-navigation.is-detail .nav-back{grid-column:2;max-width:100%}
+  .has-navigation.title-away .nav-back{min-height:0;font-size:11px}
+  .has-navigation.title-away .mtitle{display:flex;grid-column:2;align-items:center;gap:6px;min-width:0;font-size:14px;font-weight:600;line-height:1.3}
+  .has-navigation .mtitle span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .has-navigation .mtitle .st{width:12px;height:12px}
+  .has-navigation .transcript{max-height:none;overflow:visible;padding:0}
+  .has-navigation :is(.chat-head,.turnrail),.has-navigation .turn .avatar{display:none}
+  .has-navigation .col{max-width:100%}
+  .has-navigation .turn.me .col{max-width:86%}
+  .has-navigation .turn.system{padding-left:0}
+  .has-navigation .tturn{scroll-margin-top:60px}
+  .has-navigation .tturn::before{content:attr(aria-label);font-size:11.5px;color:var(--nav-muted)}
+  .has-navigation .tturn+.tturn{border-top:1px solid var(--nav-line);padding-top:14px}
+  .has-navigation .actionbar{left:12px;right:12px;bottom:calc(12px + var(--mobile-nav-height));padding:6px;border:1px solid var(--nav-line);border-radius:16px;background:hsl(var(--background) / .94);backdrop-filter:blur(8px);box-shadow:0 8px 24px rgb(0 0 0 / .18);transition:transform .2s}
+  .has-navigation.bar-away .actionbar{transform:translateY(calc(100% + 24px + var(--mobile-nav-height)))}
+  .has-navigation .actionbar .in{align-items:center}
+  .has-navigation .actionbar .btn:not(.primary){flex:none;width:44px;padding:0;gap:0;font-size:0}
+  .has-navigation .tnav{display:flex;align-items:center;flex:none;background:var(--nav-soft);border-radius:11px}
+  .has-navigation .tnav button{min-width:38px;height:44px;padding:0 4px;border:0;background:none;color:var(--nav-muted);display:grid;place-items:center;font:inherit;font-size:13px;font-weight:500;font-variant-numeric:tabular-nums}
+  .has-navigation .tnav .tcount{color:var(--nav-ink);min-width:48px}
+  .has-navigation .tnav .up svg{rotate:180deg}
+  .has-navigation .turnpill{position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:7;max-width:calc(100% - 32px);padding:6px 12px;border-radius:999px;background:var(--nav-ink);color:hsl(var(--background));font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:0 4px 12px rgb(0 0 0 / .2)}
+  .has-navigation .sheet{margin:auto 0 0;width:100%;max-width:none;max-height:85dvh;overflow-y:auto;border:0;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + var(--mobile-nav-height));background:hsl(var(--background));color:var(--nav-ink)}
+  .has-navigation .sheet::backdrop{background:rgba(9,9,11,.45)}
+  .has-navigation .sheet form{display:grid;gap:12px}
+  .has-navigation .sheet h2{font-size:14px;margin:0}
+  .has-navigation .sheet-stats{margin:0;font-size:12px;color:var(--nav-muted)}
+  .has-navigation .sheet .levels button{flex:1;min-height:40px}
+  .has-navigation .sheet .rail-list{position:static;width:auto;max-height:none;padding:0;border:0;box-shadow:none;background:none;opacity:1;visibility:visible;transform:none}
+  .has-navigation .sheet .rail-list a{min-height:44px;align-items:center}
 }
 @media(prefers-color-scheme:dark){.has-navigation .folder-icon{background:var(--nav-soft)}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
@@ -708,6 +745,7 @@ body.has-navigation{
 const icons = {
   back: '<path d="M15 6l-6 6 6 6"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  more: '<path d="M5 12h.01M12 12h.01M19 12h.01"/>',
   open: '<path d="M7 17L17 7M8 7h9v9"/>',
   next: '<path d="M9 18l6-6-6-6"/>',
   search: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
@@ -815,6 +853,7 @@ function navigationShell(body: string, detail: boolean, options: NavigationOptio
 </aside><div class="nav-backdrop" data-nav-toggle></div><div class="shell-main"><header class="topbar">
   <button class="ib nav-toggle" type="button" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="Open menu">${icon("menu")}</button>
   ${back || `<a class="mobile-brand" href="/">${icon("chat")}Session Share</a>`}
+  ${options.compactTitle ? `<span class="mtitle" aria-hidden="true">${options.compactTitle}</span><button class="ib more-toggle" type="button" data-sheet="more-sheet" aria-haspopup="dialog" aria-label="Session options">${icon("more")}</button>` : ""}
   <nav class="crumb" aria-label="Breadcrumb">${breadcrumbs}</nav>
   <form class="global-search" method="get" action="/sessions" role="search"><label class="sr" for="global-q">Search all sessions</label><input id="global-q" name="q" type="search" placeholder="Search sessions…"><button type="submit" aria-label="Search all sessions">${icon("search")}</button></form>
 </header><main class="content" id="${detail ? "view" : "home"}" tabindex="-1">${body}
@@ -865,9 +904,20 @@ for(const button of document.querySelectorAll('[data-copy]'))button.addEventList
 });
 const wide=window.matchMedia('(min-width:1000px)');
 for(const info of document.querySelectorAll('[data-meta]')){info.open=wide.matches;wide.addEventListener('change',()=>{info.open=wide.matches;});}
+// Bottom sheets (mobile session options and turn list): native modal dialogs, closed by Escape, a form button or a tap above.
+for(const button of document.querySelectorAll('[data-sheet]'))button.addEventListener('click',()=>{
+  const sheet=document.getElementById(button.dataset.sheet);sheet.showModal();sheet.querySelector('[aria-current]')?.scrollIntoView({block:'center'});
+});
+for(const sheet of document.querySelectorAll('dialog.sheet'))sheet.addEventListener('click',event=>{if(event.target===sheet&&event.clientY<sheet.getBoundingClientRect().top)sheet.close();});
+// Mobile: the compact bar shows the title once the header has scrolled away.
+const heading=document.querySelector('.dhead h1');
+if(heading&&window.IntersectionObserver)new IntersectionObserver(([entry])=>document.body.classList.toggle('title-away',!entry.isIntersecting&&entry.boundingClientRect.top<0),{rootMargin:'-52px 0px 0px 0px'}).observe(heading);
 const conversation=document.getElementById('conversation');
 if(conversation){
+  // Phones read the conversation in the page scroll; wider screens keep the bounded scroller.
+  const mobile=window.matchMedia('(max-width:759px)');
   function sizeConversation(event){
+    if(mobile.matches)return;
     const atBottom=conversation.scrollHeight-conversation.clientHeight-conversation.scrollTop<24;
     const viewport=window.visualViewport?.height??window.innerHeight;
     const actionbar=document.querySelector('.actionbar');
@@ -887,12 +937,12 @@ if(conversation){
   }
   sizeConversation();
   // Level of detail, remembered per reader.
-  const levels=conversation.querySelector('[data-levels]');
-  if(levels){
+  const levels=document.querySelectorAll('[data-levels]');
+  if(levels.length){
     let level='normal';try{level=localStorage.getItem('ss-level')||level;}catch{}
-    const setLevel=value=>{conversation.dataset.level=value;for(const b of levels.querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.level===value));try{localStorage.setItem('ss-level',value);}catch{}};
-    setLevel(level);levels.hidden=false;
-    levels.addEventListener('click',event=>{const b=event.target.closest('[data-level]');if(b)setLevel(b.dataset.level);});
+    const setLevel=value=>{conversation.dataset.level=value;for(const b of document.querySelectorAll('[data-levels] button'))b.setAttribute('aria-pressed',String(b.dataset.level===value));try{localStorage.setItem('ss-level',value);}catch{}};
+    setLevel(level);
+    for(const group of levels){group.hidden=false;group.addEventListener('click',event=>{const b=event.target.closest('[data-level]');if(b)setLevel(b.dataset.level);});}
   }
   for(const button of conversation.querySelectorAll('[data-copy-code]'))button.addEventListener('click',async()=>{
     try{await navigator.clipboard.writeText(button.closest('.cb').querySelector('code').textContent);notify('Code copied');}catch{notify('Copy unavailable.');}
@@ -901,24 +951,58 @@ if(conversation){
   const turns=[...conversation.querySelectorAll('.tturn')];
   const head=conversation.querySelector('.chat-head');
   const rail=conversation.querySelector('[data-rail]');
+  const topbar=document.querySelector('.topbar');
   const offset=()=>head?head.offsetHeight:0;
-  const goTo=(turn,smooth)=>{conversation.scrollTo({top:conversation.scrollTop+turn.getBoundingClientRect().top-conversation.getBoundingClientRect().top-offset(),behavior:smooth?'smooth':'auto'});};
+  // Programmatic jumps do not hide the action bar nor flash the turn pill.
+  let jumpUntil=0;
+  const goTo=(turn,smooth)=>{
+    if(mobile.matches){jumpUntil=Date.now()+700;turn.scrollIntoView({behavior:smooth?'smooth':'auto'});return;}
+    conversation.scrollTo({top:conversation.scrollTop+turn.getBoundingClientRect().top-conversation.getBoundingClientRect().top-offset(),behavior:smooth?'smooth':'auto'});
+  };
+  const atEnd=()=>mobile.matches?document.documentElement.scrollHeight-window.innerHeight-window.scrollY<24:conversation.scrollHeight-conversation.clientHeight-conversation.scrollTop<24;
+  const readLine=()=>mobile.matches?(topbar?topbar.offsetHeight:0)+16:conversation.getBoundingClientRect().top+offset()+8;
   const currentTurn=()=>{
-    if(conversation.scrollHeight-conversation.clientHeight-conversation.scrollTop<24)return turns.length-1;
-    const top=conversation.getBoundingClientRect().top+offset()+8;
+    if(atEnd())return turns.length-1;
+    const top=readLine();
     let index=0;turns.forEach((turn,i)=>{if(turn.getBoundingClientRect().top<=top)index=i;});return index;
   };
   if(rail&&turns.length){
-    const ticks=[...rail.querySelectorAll('.ticks i')],links=[...rail.querySelectorAll('[data-turn-link]')];
-    let shown=-1;
-    const update=()=>{const i=currentTurn();if(i===shown)return;ticks[shown]?.classList.remove('on');links[shown]?.removeAttribute('aria-current');shown=i;ticks[i]?.classList.add('on');links[i]?.setAttribute('aria-current','true');};
+    // Rail (desktop) and turn sheet (mobile) list the same turns; both follow the scroll.
+    const ticks=[...rail.querySelectorAll('.ticks i')],links=[...document.querySelectorAll('[data-turn-link]')];
+    const count=document.querySelector('[data-turn-count]'),pill=document.querySelector('[data-turn-pill]');
+    const titleOf=i=>rail.querySelector('[href="#t'+(i+1)+'"] .tt')?.textContent||'';
+    let shown=-1,pillTimer;
+    const update=()=>{
+      const i=currentTurn();if(i===shown)return;
+      ticks[shown]?.classList.remove('on');shown=i;ticks[i]?.classList.add('on');
+      for(const link of links)if(link.getAttribute('href')==='#t'+(i+1))link.setAttribute('aria-current','true');else link.removeAttribute('aria-current');
+      if(count)count.textContent=(i+1)+'/'+turns.length;
+    };
     const place=()=>{rail.style.top=offset()+8+'px';};
     place();update();
     conversation.addEventListener('scroll',update,{passive:true});
     window.addEventListener('resize',place);
-    rail.addEventListener('click',event=>{
+    // Mobile: free page scroll; the counter and a short pill show where you are, the bar hides while reading down.
+    let lastY=window.scrollY;
+    window.addEventListener('scroll',()=>{
+      if(!mobile.matches)return;
+      update();
+      const y=window.scrollY,delta=y-lastY;lastY=y;
+      if(Date.now()<jumpUntil)return;
+      if(delta>6&&y>80)document.body.classList.add('bar-away');
+      else if(delta<-6||atEnd())document.body.classList.remove('bar-away');
+      if(pill){pill.textContent=(shown+1)+'/'+turns.length+' · '+titleOf(shown);pill.hidden=false;clearTimeout(pillTimer);pillTimer=setTimeout(()=>{pill.hidden=true;},900);}
+    },{passive:true});
+    // ∧ first returns to the start of the current turn, then to the previous one; ∨ goes to the next.
+    for(const button of document.querySelectorAll('[data-turn-step]'))button.addEventListener('click',()=>{
+      const i=currentTurn(),step=Number(button.dataset.turnStep);
+      const next=step<0&&turns[i].getBoundingClientRect().top<readLine()-40?i:i+step;
+      if(turns[next])goTo(turns[next],true);
+    });
+    document.addEventListener('click',event=>{
       const link=event.target.closest('[data-turn-link]');if(!link)return;
       event.preventDefault();
+      link.closest('dialog')?.close();
       const turn=document.getElementById(link.getAttribute('href').slice(1));
       if(turn)goTo(turn,true);
       history.replaceState(null,'',link.getAttribute('href'));
@@ -928,13 +1012,18 @@ if(conversation){
   const target=/^#t\d+$/.test(location.hash)?document.getElementById(location.hash.slice(1)):null;
   const start=target&&conversation.contains(target)?target:turns.at(-1);
   if(start)goTo(start);else conversation.scrollTop=conversation.scrollHeight;
-  conversation.scrollIntoView({block:'nearest'});
+  if(!mobile.matches)conversation.scrollIntoView({block:'nearest'});
   window.addEventListener('resize',sizeConversation);
   window.visualViewport?.addEventListener('resize',sizeConversation);
   for(const panel of document.querySelectorAll('.side details,.hmeta'))panel.addEventListener('toggle',sizeConversation);
 }
 const moveForm=document.querySelector('[data-session-move]');
 if(moveForm){
+  // The mobile ⋯ sheet sends readers to the panel below the conversation header.
+  document.querySelector('[data-move-open]')?.addEventListener('click',event=>{
+    event.target.closest('dialog')?.close();
+    const meta=document.querySelector('.hmeta');if(meta)meta.open=true;const panel=moveForm.closest('details');panel.open=true;panel.scrollIntoView({block:'start'});moveForm.querySelector('select')?.focus({preventScroll:true});
+  });
   const button=moveForm.querySelector('button');
   const error=moveForm.querySelector('[data-move-error]');
   button.disabled=false;
@@ -952,9 +1041,9 @@ if(moveForm){
     finally{button.disabled=false;}
   });
 }
-const statusButton=document.querySelector('[data-session-status]');
-if(statusButton){
-  const error=document.querySelector('[data-status-error]');
+// The status pill appears in the header and in the mobile options sheet; each reports errors next to itself.
+for(const statusButton of document.querySelectorAll('[data-session-status]')){
+  const error=statusButton.closest?.('dialog')?.querySelector('[data-status-error]')||document.querySelector('[data-status-error]');
   statusButton.disabled=false;
   statusButton.addEventListener('click',async()=>{
     statusButton.disabled=true;

@@ -16,7 +16,7 @@ test('session status shows a server error with the button restored, then reloads
   vm.runInNewContext(script, {
     document: {
       getElementById: () => null,
-      querySelectorAll: () => [],
+      querySelectorAll: (selector) => selector === '[data-session-status]' ? [button] : [],
       querySelector: s => ({ '[data-session-status]': button, '[data-status-error]': error })[s] ?? null,
     },
     window: { matchMedia: () => ({}), location: { reload: () => reloads++ } },

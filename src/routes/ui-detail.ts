@@ -322,6 +322,20 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
   const statusPill = canManage ? `<button class="status-pill${done ? " is-done" : ""}" type="button" data-session-status="${e(id)}" data-status="${done ? "active" : "done"}" disabled>${statusIcon(done, false)}${doneLabel}<span class="act">${done ? "Reopen" : "Mark as done"}</span></button>`
     : done ? `<span class="status-pill is-done">${statusIcon(true, false)}${doneLabel}</span>` : "";
   const model = session.model || records.find((r) => r.data.message?.model)?.data.message?.model;
+  const turnLinks = titles.map((t, i) => `<li><a href="#t${i + 1}" data-turn-link><span class="n">${i + 1}</span><span class="tt">${e(t)}</span></a></li>`).join("");
+  const levels = `<div class="levels" role="group" aria-label="Detail level" data-levels hidden><button type="button" data-level="conv">Conversation</button><button type="button" data-level="normal">Normal</button><button type="button" data-level="full">Detailed</button></div>`;
+  const stepper = hosted && turns > 1;
+  // Mobile: ∧ counter ∨ in the action bar; the counter opens the turn list. Hidden on wider screens.
+  const turnNav = stepper ? `<div class="tnav"><button type="button" class="up" data-turn-step="-1" aria-label="Previous turn">${icon("chev")}</button><button type="button" class="tcount" data-sheet="turns-sheet" aria-haspopup="dialog"><span data-turn-count>${turns}/${turns}</span><span class="sr"> turns, open list</span></button><button type="button" data-turn-step="1" aria-label="Next turn">${icon("chev")}</button></div>` : "";
+  // Mobile ⋯ sheet: everything secondary the header shows on wider screens.
+  const sheets = `<dialog class="sheet" id="more-sheet" aria-label="Session options"><form method="dialog">
+      ${canManage ? `${statusPill}<p class="ro-note" role="alert" data-status-error hidden></p>` : statusPill}
+      ${hosted ? `<p class="sheet-stats">${tokens} tokens · ${records.length} messages · ${plural(turns, "turn")} · ${plural(tools, "tool")}</p>${levels}
+      <button class="btn" type="button" data-copy="${e(command)}">${icon("branch")}Copy resume command</button>` : ""}
+      ${movePanel ? `<button class="btn" type="button" data-move-open>${icon("folder")}Change project</button>` : ""}
+      <button class="btn">Close</button></form></dialog>
+    ${stepper ? `<dialog class="sheet" id="turns-sheet" aria-label="Turns"><form method="dialog"><h2>Turns</h2><ol class="rail-list">${turnLinks}</ol><button class="btn">Close</button></form></dialog>
+    <div class="turnpill" data-turn-pill hidden aria-hidden="true"></div>` : ""}`;
   const meta = (label: string, value: unknown, mono = false) => value == null || value === "" ? "" : `<dt>${label}</dt><dd${mono ? ' class="mono"' : ""}>${e(value)}</dd>`;
   return page(String(session.title || id), `<div class="detail">
     <header class="dhead${done ? " is-done" : ""}">${statusPill}<h1>${e(session.title || id)}</h1>
@@ -341,7 +355,7 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
       </details>
       ${session.owner_email !== who.email && hosted ? `<p class="ro-note">Read-only: ${e(session.owner_email)}’s session. If you resume it, the copy will be yours.</p>` : ""}
       ${canManage ? '<p class="ro-note" role="alert" data-status-error hidden></p>' : ""}
-      <div class="actionbar gutter"><div class="in">${action}</div></div>
+      <div class="actionbar gutter"><div class="in">${turnNav}${action}</div></div>
     </header>
     <aside class="side" aria-label="Session information">
       <details class="panel" data-meta open><summary>Information<span class="tchev">${icon("chev")}</span></summary><div class="pb"><dl class="meta">
@@ -362,12 +376,13 @@ export async function sessionDetailPage(request: Request, env: Env, who: Identit
       ${movePanel}
     </aside>
     ${!hosted ? "" : `<section class="chat transcript" id="conversation" tabindex="0" aria-label="Conversation"><div class="chat-head"><h2 class="chat-title">Conversation</h2>
-      <div class="levels" role="group" aria-label="Detail level" data-levels hidden><button type="button" data-level="conv">Conversation</button><button type="button" data-level="normal">Normal</button><button type="button" data-level="full">Detailed</button></div></div>
+      ${levels}</div>
       ${turns > 1 ? `<nav class="turnrail" aria-label="Conversation turns" tabindex="0" data-rail><div class="ticks" aria-hidden="true">${titles.map(() => "<i></i>").join("")}</div>
-        <ol class="rail-list">${titles.map((t, i) => `<li><a href="#t${i + 1}" data-turn-link><span class="n">${i + 1}</span><span class="tt">${e(t)}</span></a></li>`).join("")}</ol></nav>` : ""}
+        <ol class="rail-list">${turnLinks}</ol></nav>` : ""}
       ${invalid ? `<p class="ro-note">${invalid} invalid JSONL line(s) skipped.</p>` : ""}
       ${conversation || '<p class="empty">No messages.</p>'}
-    </section>`}</div>`, 200, true, {
+    </section>`}</div>${sheets}`, 200, true, {
+      compactTitle: `${statusIcon(done, false)}<span>${e(session.title || id)}</span>`,
       active: "projects", projects, sidebar, currentSession: id, email: who.email, currentProject: String(session.project), backHref,
       backLabel: backHref.startsWith("/sessions") ? "All sessions" : project?.name || String(session.project),
       breadcrumbs: [
