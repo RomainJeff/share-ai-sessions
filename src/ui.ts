@@ -464,7 +464,7 @@ body.has-navigation{
 .has-navigation .members-panel li+li{border-top:1px solid var(--nav-line)}
 .has-navigation .members-panel li>span:first-child{min-width:0;overflow-wrap:anywhere}
 .has-navigation .members-panel .role{flex:none}
-.has-navigation .group-title{color:var(--nav-muted);font-size:11px;font-weight:500;margin:24px 0 9px;display:flex;align-items:center;gap:7px}
+.has-navigation .group-title{color:var(--nav-ink);font-size:15px;font-weight:600;letter-spacing:-.2px;margin:28px 0 10px;display:flex;align-items:center;gap:8px}
 .has-navigation .project-sessions.in-project .session-row{grid-template-columns:minmax(0,1fr) 137px 67px 90px;min-height:86px}
 .has-navigation .project-sessions .session-note{max-width:68ch}
 .has-navigation .msg-count{font-size:11px;color:var(--nav-muted);text-align:right;white-space:nowrap}
