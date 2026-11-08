@@ -6,11 +6,11 @@ Share Claude Code and Codex session transcripts with your team: upload, sync, br
 
 *Watch the flow (47 s, sound on): share a Claude Code session, then a teammate forks it in Codex.*
 
-![Homepage showing shared sessions, a fork attributed to its original author, and four active projects](docs/images/homepage.png)
+![Homepage with in-progress sessions grouped by project in the sidebar, recent sessions including a fork and a T3 Code relay, and four active projects](docs/images/homepage.png)
 
 *Homepage with fictional sessions, authors, and projects.*
 
-![Shared session reader showing the conversation, intermediate steps, session details, and resume action](docs/images/session.png)
+![Shared session reader showing a turn with its tool steps (thinking, search, reads, edit, tests), the detail levels, and the resume action](docs/images/session.png)
 
 *A fictional shared session, ready to resume in Claude Code or Codex.*
 
